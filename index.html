@@ -62,7 +62,7 @@
   .chain-rail .logo,.chain-rail .logo-fallback{width:40px;height:40px;border-radius:8px;flex:none;}
   .chain-rail .logo{object-fit:cover;background:#fff;border:1px solid var(--border);}
   .chain-rail .logo-fallback{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;}
-  .chain-rail .name{font-weight:700;font-size:11px;line-height:1.25;word-break:break-word;}
+  .chain-rail .name{font-weight:700;font-size:11px;line-height:1.25;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-height:28px;}
   .chain-rail .cycle-pill{font-size:9.5px;color:var(--muted);background:#f0f1f4;padding:1px 6px;border-radius:8px;}
   .chain-rail .rail-actions{display:flex;gap:4px;}
   .chain-rail .rail-actions button{padding:1px 6px;font-size:11px;line-height:1.4;}
@@ -202,7 +202,7 @@
       <div class="gantt-body">
         <div class="gantt-frozen">
           <div class="frozen-header"><div class="fh-rail">Chain</div><div class="fh-label">SKU</div></div>
-          <div class="frozen-viewport">
+          <div class="frozen-viewport" id="frozenViewport">
             <div class="frozen-inner" id="frozenInner"></div>
           </div>
         </div>
@@ -470,24 +470,26 @@
       return;
     }
 
+    // The chain-rail (logo + name + cycle pill + buttons) needs roughly this much vertical room
+    // to render without the browser force-expanding the row(s) it spans. If a chain has few or no
+    // SKU rows, its natural row-span can be much shorter than that — and since the frozen pane and
+    // the track pane are separate CSS Grids, only the frozen pane would get force-expanded (the
+    // track pane has no tall item in that row), leaving the two panes different heights. That
+    // desyncs the scroll container (sized off the shorter track pane) from the frozen pane's real
+    // content, silently clipping chains with no way to scroll to them. Padding the last row of
+    // each chain's block up to this minimum guarantees the rail always fits with room to spare.
+    var MIN_CHAIN_BLOCK_H = 150;
+
     var rowIndex = 2;
     chainsToShow.forEach(function(chain){
       var chainStartRow = rowIndex;
-
-      if(chain.cycleAnchorDate){
-        var startCls = rowIndex===chainStartRow ? " chain-start" : "";
-        frozenHtml += '<div class="cycle-label-cell'+startCls+'" style="grid-column:1/-1;grid-row:'+rowIndex+';height:18px;">Cycle (P#)</div>';
-        trackHtml += '<div class="cycle-row'+startCls+'" style="grid-row:'+rowIndex+';height:18px;width:'+totalPx+'px;">' + cycleRowHtml(chain) + '</div>';
-        rowIndex++;
-      }
-
       var chainDeals = deals.filter(function(d){ return d.chainId===chain.id; });
 
+      var rows = [];
+      if(chain.cycleAnchorDate) rows.push({type:"cycle", height:18});
+
       if(chainDeals.length===0){
-        var eCls = rowIndex===chainStartRow ? " chain-start" : "";
-        frozenHtml += '<div class="empty-chain-row'+eCls+'" style="grid-column:1/-1;grid-row:'+rowIndex+';height:'+EMPTY_ROW_H+'px;">No deals yet.<button class="ghost" data-add-deal-chain="'+chain.id+'">+ Add</button></div>';
-        trackHtml += '<div class="track-cell'+eCls+'" style="grid-row:'+rowIndex+';height:'+EMPTY_ROW_H+'px;width:'+totalPx+'px;"></div>';
-        rowIndex++;
+        rows.push({type:"empty", height:EMPTY_ROW_H});
       } else {
         var productIds = [];
         chainDeals.forEach(function(d){ if(productIds.indexOf(d.productId)===-1) productIds.push(d.productId); });
@@ -495,17 +497,32 @@
           var pa = getProduct(a), pb = getProduct(b);
           return (pa?pa.name:"").localeCompare(pb?pb.name:"");
         });
-
         productIds.forEach(function(pid){
           var product = getProduct(pid);
           if(!product) return;
           var prodDeals = chainDeals.filter(function(d){ return d.productId===pid; });
           var lanes = packLanes(prodDeals);
           var laneCount = Math.max(lanes.length, 1);
-          var rowH = laneCount * 34 + 10;
-          var sCls = rowIndex===chainStartRow ? " chain-start" : "";
+          rows.push({type:"sku", height: laneCount*34+10, product:product, lanes:lanes});
+        });
+      }
 
-          frozenHtml += '<div class="label-cell'+sCls+'" style="grid-row:'+rowIndex+';height:'+rowH+'px;">' +
+      var totalH = rows.reduce(function(sum,r){ return sum+r.height; }, 0);
+      if(rows.length>0 && totalH < MIN_CHAIN_BLOCK_H){
+        rows[rows.length-1].height += (MIN_CHAIN_BLOCK_H - totalH);
+      }
+
+      rows.forEach(function(row, i){
+        var sCls = i===0 ? " chain-start" : "";
+        if(row.type==="cycle"){
+          frozenHtml += '<div class="cycle-label-cell'+sCls+'" style="grid-column:1/-1;grid-row:'+rowIndex+';height:'+row.height+'px;">Cycle (P#)</div>';
+          trackHtml += '<div class="cycle-row'+sCls+'" style="grid-row:'+rowIndex+';height:'+row.height+'px;width:'+totalPx+'px;">' + cycleRowHtml(chain) + '</div>';
+        } else if(row.type==="empty"){
+          frozenHtml += '<div class="empty-chain-row'+sCls+'" style="grid-column:1/-1;grid-row:'+rowIndex+';height:'+row.height+'px;">No deals yet.<button class="ghost" data-add-deal-chain="'+chain.id+'">+ Add</button></div>';
+          trackHtml += '<div class="track-cell'+sCls+'" style="grid-row:'+rowIndex+';height:'+row.height+'px;width:'+totalPx+'px;"></div>';
+        } else {
+          var product = row.product, lanes = row.lanes;
+          frozenHtml += '<div class="label-cell'+sCls+'" style="grid-row:'+rowIndex+';height:'+row.height+'px;">' +
             '<div class="sku-row-top">' +
               logoOrFallback(product, "sku-logo", "sku-logo-fallback") +
               '<span class="sku-color-dot" style="background:'+product.color+'"></span>' +
@@ -518,17 +535,17 @@
             '<div class="sku-code">'+escapeHtml(product.skuCode)+'</div>' +
             '</div>';
 
-          trackHtml += '<div class="track-cell'+sCls+'" data-chain="'+chain.id+'" data-product="'+product.id+'" style="grid-row:'+rowIndex+';height:'+rowH+'px;width:'+totalPx+'px;">' +
+          trackHtml += '<div class="track-cell'+sCls+'" data-chain="'+chain.id+'" data-product="'+product.id+'" style="grid-row:'+rowIndex+';height:'+row.height+'px;width:'+totalPx+'px;">' +
             gridLinesHtml() + todayLineHtml() +
             lanes.map(function(laneDeals, laneIdx){
               return laneDeals.map(function(d){ return barHtml(d, product, laneIdx); }).join("");
             }).join("") +
             '</div>';
-          rowIndex++;
-        });
-      }
+        }
+        rowIndex++;
+      });
 
-      var numRows = rowIndex - chainStartRow;
+      var numRows = rows.length;
       frozenHtml += '<div class="chain-rail chain-start" style="grid-column:1;grid-row:'+chainStartRow+' / span '+numRows+';">' +
         logoOrFallback(chain, "logo", "logo-fallback") +
         '<span class="name">'+escapeHtml(chain.name)+'</span>' +
@@ -1194,6 +1211,13 @@
   document.getElementById("ganttScroll").addEventListener("scroll", function(){
     document.getElementById("frozenInner").style.transform = "translateY(-"+this.scrollTop+"px)";
   });
+  // The frozen pane itself has overflow:hidden (its content is moved via transform, not its own
+  // scrollbar), so a mouse wheel over the chain/SKU columns would otherwise do nothing. Forward
+  // wheel scrolling from there to the real scroll container.
+  document.getElementById("frozenViewport").addEventListener("wheel", function(e){
+    e.preventDefault();
+    document.getElementById("ganttScroll").scrollTop += e.deltaY;
+  }, { passive: false });
 
   document.querySelectorAll("thead th[data-sort]").forEach(function(th){
     th.addEventListener("click", function(){
