@@ -33,7 +33,7 @@
   .view-toggle button{border:none;border-radius:0;}
   .view-toggle button.active{background:var(--accent);color:#fff;}
   .sku-legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:11.5px;color:var(--muted);padding:0 4px 12px;align-items:center;}
-  .sku-legend .chip{display:flex;align-items:center;gap:5px;}
+  .sku-legend .chip{display:flex;align-items:center;gap:5px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .sku-legend .dot{width:9px;height:9px;border-radius:50%;flex:none;}
 
   /* Gantt
@@ -45,12 +45,12 @@
   .gantt-wrap{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
   .gantt-nav{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);}
   .gantt-body{display:flex;align-items:stretch;}
-  .gantt-frozen{flex:none;width:298px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--panel);}
+  .gantt-frozen{flex:none;width:328px;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--panel);}
   .frozen-header{height:40px;flex:none;display:flex;border-bottom:1px solid var(--border);}
   .frozen-header .fh-rail{width:108px;flex:none;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;border-right:1px solid var(--border);}
   .frozen-header .fh-label{flex:1;display:flex;align-items:center;padding-left:10px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
   .frozen-viewport{flex:1;overflow:hidden;position:relative;max-height:calc(70vh - 40px);}
-  .frozen-inner{position:absolute;top:0;left:0;right:0;display:grid;grid-template-columns:108px 190px;will-change:transform;}
+  .frozen-inner{position:absolute;top:0;left:0;right:0;display:grid;grid-template-columns:108px 220px;will-change:transform;}
   .gantt-scroll{overflow:auto;max-height:70vh;position:relative;flex:1;min-width:0;}
   .gantt-grid{display:grid;}
   .axis-cell{position:sticky;top:0;z-index:4;background:var(--panel);border-bottom:1px solid var(--border);height:40px;}
@@ -69,10 +69,10 @@
 
   .label-cell{background:var(--panel);padding:6px 10px;display:flex;flex-direction:column;justify-content:center;gap:3px;}
   .label-cell.chain-start{border-top:2px solid var(--border);}
-  .label-cell .sku-row-top{display:flex;align-items:center;gap:7px;}
-  .label-cell .sku-name{font-weight:600;font-size:12.5px;}
-  .label-cell .sku-code{color:var(--muted);font-size:10.5px;}
-  .label-cell .sku-actions{display:flex;gap:5px;margin-left:auto;}
+  .label-cell .sku-row-top{display:flex;align-items:flex-start;gap:7px;}
+  .label-cell .sku-name{font-weight:600;font-size:12px;line-height:1.3;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .label-cell .sku-code{color:var(--muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .label-cell .sku-actions{display:flex;gap:5px;margin-left:auto;flex:none;}
   .label-cell .sku-actions button{padding:1px 5px;font-size:10.5px;}
   .cycle-label-cell{background:#fafbfc;padding:2px 10px;display:flex;align-items:center;font-size:9.5px;color:var(--muted);}
   .cycle-label-cell.chain-start{border-top:2px solid var(--border);}
@@ -403,7 +403,7 @@
 
     var legend = document.getElementById("skuLegend");
     legend.innerHTML = DATA.products.map(function(p){
-      return '<span class="chip"><span class="dot" style="background:'+p.color+'"></span>'+escapeHtml(p.name)+' <span style="opacity:.7">('+escapeHtml(p.skuCode)+')</span></span>';
+      return '<span class="chip" title="'+escapeHtml(p.name+' ('+p.skuCode+')')+'"><span class="dot" style="background:'+p.color+'"></span>'+escapeHtml(p.name)+'</span>';
     }).join("") || '<span style="opacity:.7">No SKUs yet — add one via "Manage SKUs".</span>';
   }
 
@@ -503,7 +503,9 @@
           var prodDeals = chainDeals.filter(function(d){ return d.productId===pid; });
           var lanes = packLanes(prodDeals);
           var laneCount = Math.max(lanes.length, 1);
-          rows.push({type:"sku", height: laneCount*34+10, product:product, lanes:lanes});
+          // 58px guarantees room for a 2-line wrapped SKU name + code line even for a single-lane
+          // row; taller rows (more concurrent promos) just use whichever is bigger.
+          rows.push({type:"sku", height: Math.max(laneCount*34+10, 58), product:product, lanes:lanes});
         });
       }
 
@@ -525,14 +527,14 @@
           frozenHtml += '<div class="label-cell'+sCls+'" style="grid-row:'+rowIndex+';height:'+row.height+'px;">' +
             '<div class="sku-row-top">' +
               logoOrFallback(product, "sku-logo", "sku-logo-fallback") +
-              '<span class="sku-color-dot" style="background:'+product.color+'"></span>' +
-              '<span class="sku-name">'+escapeHtml(product.name)+'</span>' +
+              '<span class="sku-color-dot" style="background:'+product.color+';margin-top:5px;"></span>' +
+              '<span class="sku-name" title="'+escapeHtml(product.name)+'">'+escapeHtml(product.name)+'</span>' +
               '<span class="sku-actions">' +
                 '<button class="ghost" data-edit-product="'+product.id+'" title="Edit SKU">Edit</button>' +
                 '<button class="ghost" data-add-deal-chain="'+chain.id+'" data-add-deal-product="'+product.id+'" title="Add deal for this SKU/chain">+</button>' +
               '</span>' +
             '</div>' +
-            '<div class="sku-code">'+escapeHtml(product.skuCode)+'</div>' +
+            '<div class="sku-code" title="'+escapeHtml(product.skuCode)+'">'+escapeHtml(product.skuCode)+'</div>' +
             '</div>';
 
           trackHtml += '<div class="track-cell'+sCls+'" data-chain="'+chain.id+'" data-product="'+product.id+'" style="grid-row:'+rowIndex+';height:'+row.height+'px;width:'+totalPx+'px;">' +
@@ -1013,6 +1015,73 @@
     });
   }
 
+  // Adds an incoming dataset on top of what's already here instead of wiping it out. Existing
+  // chains/products are matched by id and left completely untouched (so logos, colors, everything
+  // stay intact) — only genuinely new ones get added. Deals are appended, skipping anything that
+  // looks like an exact duplicate of a deal that already exists, so re-importing the same file
+  // twice is safe.
+  function mergeImportedData(incoming){
+    var addedChains = 0, addedProducts = 0, addedDeals = 0, skippedDupDeals = 0;
+    var existingChainIds = {};
+    DATA.chains.forEach(function(c){ existingChainIds[c.id] = true; });
+    (incoming.chains||[]).forEach(function(c){
+      if(!existingChainIds[c.id]){ DATA.chains.push(c); existingChainIds[c.id] = true; addedChains++; }
+    });
+    var existingProductIds = {};
+    DATA.products.forEach(function(p){ existingProductIds[p.id] = true; });
+    (incoming.products||[]).forEach(function(p){
+      if(!existingProductIds[p.id]){ DATA.products.push(p); existingProductIds[p.id] = true; addedProducts++; }
+    });
+    var existingDealKeys = {};
+    DATA.deals.forEach(function(d){
+      existingDealKeys[d.chainId+"|"+d.productId+"|"+d.startDate+"|"+d.endDate+"|"+d.promoName] = true;
+    });
+    (incoming.deals||[]).forEach(function(d){
+      var key = d.chainId+"|"+d.productId+"|"+d.startDate+"|"+d.endDate+"|"+d.promoName;
+      if(existingDealKeys[key]){ skippedDupDeals++; return; }
+      var newDeal = Object.assign({}, d);
+      if(DATA.deals.some(function(x){ return x.id===newDeal.id; })) newDeal.id = uid();
+      DATA.deals.push(newDeal);
+      existingDealKeys[key] = true;
+      addedDeals++;
+    });
+    return { addedChains:addedChains, addedProducts:addedProducts, addedDeals:addedDeals, skippedDupDeals:skippedDupDeals };
+  }
+
+  function openImportChoiceModal(parsed){
+    var html = '<div class="modal-backdrop"><div class="modal">' +
+      '<h2>Import Data</h2>' +
+      '<p style="font-size:13px;color:var(--text);margin-top:0;">This file has '+(parsed.chains||[]).length+' chain(s), '+(parsed.products||[]).length+' SKU(s) and '+(parsed.deals||[]).length+' deal(s). How should it be applied?</p>' +
+      '<div class="field" style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">' +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">Merge (recommended)</div>' +
+        '<div class="hint" style="margin:0 0 10px;">Adds anything new from the file. Every chain and SKU you already have — including logos — is left exactly as it is.</div>' +
+        '<button class="primary" id="doMergeImportBtn">Merge into current data</button>' +
+      '</div>' +
+      '<div class="field" style="border:1px solid var(--border);border-radius:8px;padding:12px;">' +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">Replace everything</div>' +
+        '<div class="hint" style="margin:0 0 10px;">Deletes all current chains, SKUs and deals and replaces them with exactly what\'s in this file. Use this only for restoring a full backup.</div>' +
+        '<button class="danger" id="doReplaceImportBtn">Replace all data</button>' +
+      '</div>' +
+      '<div class="modal-actions"><div></div><div class="right"><button id="cancelImportBtn">Cancel</button></div></div>' +
+      '</div></div>';
+    document.getElementById("modalRoot").innerHTML = html;
+    document.getElementById("cancelImportBtn").addEventListener("click", closeModal);
+    document.getElementById("doMergeImportBtn").addEventListener("click", function(){
+      var result = mergeImportedData(parsed);
+      saveData(DATA);
+      closeModal();
+      renderAll();
+      alert("Merged: +"+result.addedChains+" chain(s), +"+result.addedProducts+" SKU(s), +"+result.addedDeals+" deal(s)."+(result.skippedDupDeals ? " Skipped "+result.skippedDupDeals+" deal(s) already in your data." : ""));
+    });
+    document.getElementById("doReplaceImportBtn").addEventListener("click", function(){
+      if(!confirm("This will permanently delete everything currently in your tracker and replace it with this file. This cannot be undone. Continue?")) return;
+      DATA = parsed;
+      saveData(DATA);
+      closeModal();
+      renderAll();
+    });
+  }
+
   function deleteDeal(id){
     if(!confirm("Delete this deal? This cannot be undone.")) return;
     DATA.deals = DATA.deals.filter(function(d){return d.id!==id;});
@@ -1107,6 +1176,7 @@
         logoOrFallback(pr, "swatch-img", "swatch-fallback") +
         '<div class="meta"><div class="n">'+escapeHtml(pr.name)+'</div><div class="c">'+escapeHtml(pr.skuCode)+'</div></div>' +
         '<button class="ghost" data-pm-edit="'+pr.id+'">Edit</button>' +
+        (DATA.products.length>1 ? '<button class="ghost" data-pm-merge="'+pr.id+'" title="Merge this SKU into another one">Merge</button>' : '') +
         '<button class="ghost danger" data-pm-del="'+pr.id+'">Delete</button>' +
         '</div>';
     }).join("") || '<div class="empty-note">No SKUs yet.</div>';
@@ -1131,6 +1201,9 @@
     document.getElementById("cancelProductBtn").addEventListener("click", closeModal);
     document.querySelectorAll("[data-pm-edit]").forEach(function(b){
       b.addEventListener("click", function(){ openProductModal(getProduct(b.dataset.pmEdit)); });
+    });
+    document.querySelectorAll("[data-pm-merge]").forEach(function(b){
+      b.addEventListener("click", function(){ openMergeProductModal(getProduct(b.dataset.pmMerge)); });
     });
     document.querySelectorAll("[data-pm-del]").forEach(function(b){
       b.addEventListener("click", function(){
@@ -1158,6 +1231,39 @@
       };
       if(isNew){ DATA.products.push(newP); }
       else { var idx = DATA.products.findIndex(function(x){return x.id===p.id;}); DATA.products[idx] = newP; }
+      saveData(DATA);
+      closeModal();
+      renderAll();
+      openProductModal(null);
+    });
+  }
+
+  // Folds one SKU into another: every deal pointing at the source SKU gets repointed at the
+  // target, then the source SKU is removed. Used to clean up duplicates — e.g. a nickname-based
+  // SKU and a formally-named one that turn out to be the same real product.
+  function openMergeProductModal(source){
+    var others = DATA.products.filter(function(p){ return p.id!==source.id; });
+    if(others.length===0){ alert("There's no other SKU to merge into."); return; }
+    var dealCount = DATA.deals.filter(function(d){ return d.productId===source.id; }).length;
+    var options = others.map(function(p){ return '<option value="'+p.id+'">'+escapeHtml(p.skuCode)+' — '+escapeHtml(p.name)+'</option>'; }).join("");
+    var html = '<div class="modal-backdrop"><div class="modal">' +
+      '<h2>Merge SKU</h2>' +
+      '<p style="font-size:13px;">Fold <b>'+escapeHtml(source.name)+'</b> ('+escapeHtml(source.skuCode)+') into another SKU.' +
+        (dealCount>0 ? ' Its '+dealCount+' deal(s) will be moved to the SKU you pick below.' : '') +
+      '</p>' +
+      '<div class="field"><label>Merge into</label><select id="mg_target">'+options+'</select></div>' +
+      '<div class="hint">"'+escapeHtml(source.name)+'" will then be deleted. This can\'t be undone.</div>' +
+      '<div class="modal-actions">' +
+        '<div><button id="cancelMergeBtn">Cancel</button></div>' +
+        '<div class="right"><button class="danger" id="confirmMergeBtn">Merge SKU</button></div>' +
+      '</div>' +
+      '</div></div>';
+    document.getElementById("modalRoot").innerHTML = html;
+    document.getElementById("cancelMergeBtn").addEventListener("click", closeModal);
+    document.getElementById("confirmMergeBtn").addEventListener("click", function(){
+      var targetId = document.getElementById("mg_target").value;
+      DATA.deals.forEach(function(d){ if(d.productId===source.id) d.productId = targetId; });
+      DATA.products = DATA.products.filter(function(p){ return p.id!==source.id; });
       saveData(DATA);
       closeModal();
       renderAll();
@@ -1246,10 +1352,7 @@
         var parsed = JSON.parse(ev.target.result);
         if(!parsed.chains || !parsed.deals) throw new Error("Missing chains/deals");
         if(!parsed.products) parsed.products = [];
-        if(!confirm("Import will replace all current data in this browser. Continue?")) return;
-        DATA = parsed;
-        saveData(DATA);
-        renderAll();
+        openImportChoiceModal(parsed);
       }catch(err){
         alert("Could not import file: " + err.message);
       }
