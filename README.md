@@ -91,6 +91,30 @@ $35.96 COGS + $0.60 freight) from each gives Profit $11.57 / $9.57 / $6.57
 / -$5.43 respectively — all of which match the source pricing sheet
 exactly.
 
+**GST.** Every $ figure in this tool — List Price, Product COGS,
+distributor fee, banner terms, discount, scan deal, pick fee — is entered
+and calculated **ex GST**, matching how Your Mates invoices. **Shelf RRP is
+the one exception: it's GST-inclusive**, since that's what's actually on
+the shelf tag. Banner Margin converts Shelf RRP to ex GST (÷ 1.1) before
+comparing it to the banner's (ex GST) cost price, so the 10% GST component
+isn't counted as margin. Nothing else in the tool touches this — YM Net $,
+Profit $ and YM GP% are all ex GST end-to-end and unaffected.
+
+**Banner Margin** = (Shelf RRP ex GST − Banner Cost Price) ÷ Shelf RRP ex
+GST, where **Banner Cost Price** = List Price ÷ pack qty + Pick Fee ÷ pack
+qty − Discount ÷ pack qty − Scan Deal. A bigger discount or scan deal lowers
+the banner's cost and improves their margin; a bigger pick fee raises their
+cost and cuts into it. Distributor fee and banner-term rebates don't appear
+here at all — those are a Your Mates/distributor settlement, not something
+that changes what the banner is invoiced.
+
+**Pick fee ($/carton)** is a flat fee some banners pay directly to a
+distributor (commonly ALM) to have stock picked — it's set on the banner's
+**Terms** panel alongside the other fee fields, is versioned by period like
+everything else, and only affects that banner's cost price / margin. It has
+no effect on YM Net $, Profit $ or YM GP%, since Your Mates isn't a party to
+it.
+
 **Deal / promo types are configured per banner.** Click **Manage deal
 types** on any banner page to define exactly which deals that banner runs
 (e.g. Endeavour might be Everyday + Promo 1 + Promo 2, each as Multipack or

@@ -73,6 +73,15 @@
     return Math.round((n + Number.EPSILON) * 100) / 100;
   }
 
+  // Every $ figure in this engine (List Price, COGS, distributor/banner-term
+  // fees, discount, scan deal, pick fee) is GST-EXCLUSIVE, matching how
+  // Your Mates invoices. Shelf RRP is the one exception — it's what's on
+  // the shelf tag, so it's GST-INCLUSIVE. Banner Margin compares the
+  // banner's cost (ex GST) against what they actually sell for, so the
+  // shelf price is converted to ex-GST first — otherwise the GST component
+  // gets counted as margin and every banner margin looks inflated.
+  const DEFAULT_GST_RATE = 0.1; // 10% (AU)
+
   /**
    * Runs the banner-terms fee/rebate waterfall off a given base price and
    * returns the resulting net, plus a line-by-line breakdown for display.
@@ -134,16 +143,22 @@
    *   scanDeal            : $ per shelf unit, funded by YM, paid back to the
    *                         banner per unit sold — reduces both YM's net
    *                         and the banner's effective cost price
-   *   shelfRRP            : $ banner's retail shelf price for this deal
+   *   shelfRRP            : $ banner's retail shelf price for this deal,
+   *                         GST-INCLUSIVE (what's actually on the shelf
+   *                         tag) — every other $ figure here is ex GST.
    *   cogs                : { productCogs }
-   *   bannerTerms         : { freightPct, directDeliveryPct, kegCollectionPct }
+   *   bannerTerms         : { freightPct, directDeliveryPct, kegCollectionPct,
+   *                         pickFeePerCarton }
    *   targetMarginPct     : number|null — banner's expected margin % for this
    *                         pack type / deal type (null = not set)
    *   packQty             : how many of the shelf-priced unit make up one
    *                         carton (1 for carton-level deals)
+   *   gstRate             : decimal GST rate used to convert shelfRRP to ex
+   *                         GST for the banner-margin calc (default 0.10)
    */
-  function evaluateDeal({ listPrice, distributorFeePct, feeWaterfall, discountPerCarton, scanDeal, shelfRRP, cogs, bannerTerms, targetMarginPct, packQty }) {
+  function evaluateDeal({ listPrice, distributorFeePct, feeWaterfall, discountPerCarton, scanDeal, shelfRRP, cogs, bannerTerms, targetMarginPct, packQty, gstRate }) {
     const qty = packQty && packQty > 0 ? packQty : 1;
+    const gst = gstRate != null ? gstRate : DEFAULT_GST_RATE;
 
     // Distributor fee: on the full list price.
     const distFeePct = distributorFeePct || 0;
@@ -166,24 +181,33 @@
     const profit = ymNetDeal - cost.total;
     const gpPct = ymNetDeal !== 0 ? profit / ymNetDeal : null;
 
-    // Banner cost price: what the banner effectively pays per shelf unit.
+    // Banner cost price: what the banner effectively pays per shelf unit,
+    // ex GST (matching List Price / discount / scan deal, all ex GST).
     // The distributor fee and banner-term rebates are a YM/distributor-side
-    // settlement and don't change what the banner is invoiced. Both a
-    // discount-per-carton and a scan deal DO lower the banner's cost,
-    // though — a bigger discount or scan deal means a better banner margin.
+    // settlement and don't change what the banner is invoiced. A discount
+    // and a scan deal DO lower the banner's cost (bigger = better banner
+    // margin); a pick fee — a flat $/carton the banner pays a distributor
+    // like ALM to have stock picked — DOES the opposite, adding to their
+    // cost and eating into their margin.
+    const pickFeePerCarton = (bannerTerms && bannerTerms.pickFeePerCarton) || 0;
+    const pickFeePerShelfUnit = pickFeePerCarton / qty;
     const discountPerShelfUnit = (discountPerCarton || 0) / qty;
-    const bannerCostPriceBeforeScan = listPrice / qty - discountPerShelfUnit;
+    const bannerCostPriceBeforeScan = listPrice / qty + pickFeePerShelfUnit - discountPerShelfUnit;
     const bannerCostPrice = bannerCostPriceBeforeScan - (scanDeal || 0);
-    const bannerMarginDollar = shelfRRP != null ? shelfRRP - bannerCostPrice : null;
-    const bannerMarginPct = shelfRRP ? bannerMarginDollar / shelfRRP : null;
+
+    // Shelf RRP is GST-inclusive; convert to ex GST before comparing to the
+    // (ex GST) banner cost price, so GST itself isn't counted as margin.
+    const shelfRRPExGst = shelfRRP != null ? shelfRRP / (1 + gst) : null;
+    const bannerMarginDollar = shelfRRPExGst != null ? shelfRRPExGst - bannerCostPrice : null;
+    const bannerMarginPct = shelfRRPExGst ? bannerMarginDollar / shelfRRPExGst : null;
 
     let meetsTarget = null;
     let requiredScanDealForTarget = null;
     let gapToTargetDollar = null;
-    if (targetMarginPct != null && shelfRRP != null) {
+    if (targetMarginPct != null && shelfRRPExGst != null) {
       meetsTarget = bannerMarginPct >= targetMarginPct - 1e-9;
-      // Solve: (bannerCostPriceBeforeScan - scanDeal) = RRP*(1-target%)
-      const bannerCostPriceNeeded = shelfRRP * (1 - targetMarginPct);
+      // Solve: (bannerCostPriceBeforeScan - scanDeal) = RRP(exGST)*(1-target%)
+      const bannerCostPriceNeeded = shelfRRPExGst * (1 - targetMarginPct);
       requiredScanDealForTarget = bannerCostPriceBeforeScan - bannerCostPriceNeeded;
       gapToTargetDollar = requiredScanDealForTarget - (scanDeal || 0);
     }
@@ -202,8 +226,12 @@
       cost,
       profit: round2(profit),
       gpPct,
+      pickFeePerCarton: round2(pickFeePerCarton),
+      pickFeePerShelfUnit: round2(pickFeePerShelfUnit),
       bannerCostPrice: round2(bannerCostPrice),
       shelfRRP,
+      gstRate: gst,
+      shelfRRPExGst: shelfRRPExGst != null ? round2(shelfRRPExGst) : null,
       bannerMarginDollar: bannerMarginDollar != null ? round2(bannerMarginDollar) : null,
       bannerMarginPct,
       targetMarginPct,
@@ -222,11 +250,14 @@
    * This answers: "what scan deal do we need to offer to meet the margin
    * expectations of the banner, and what's the GP impact?"
    */
-  function solveRequiredScanDeal({ listPrice, distributorFeePct, feeWaterfall, discountPerCarton, shelfRRP, targetMarginPct, cogs, bannerTerms, packQty }) {
+  function solveRequiredScanDeal({ listPrice, distributorFeePct, feeWaterfall, discountPerCarton, shelfRRP, targetMarginPct, cogs, bannerTerms, packQty, gstRate }) {
     const qty = packQty && packQty > 0 ? packQty : 1;
+    const gst = gstRate != null ? gstRate : DEFAULT_GST_RATE;
+    const pickFeePerCarton = (bannerTerms && bannerTerms.pickFeePerCarton) || 0;
     const discountPerShelfUnit = (discountPerCarton || 0) / qty;
-    const bannerCostPriceBeforeScan = listPrice / qty - discountPerShelfUnit;
-    const bannerCostPriceNeeded = shelfRRP * (1 - targetMarginPct);
+    const bannerCostPriceBeforeScan = listPrice / qty + pickFeePerCarton / qty - discountPerShelfUnit;
+    const shelfRRPExGst = shelfRRP / (1 + gst);
+    const bannerCostPriceNeeded = shelfRRPExGst * (1 - targetMarginPct);
     const requiredScanDeal = Math.max(0, bannerCostPriceBeforeScan - bannerCostPriceNeeded);
 
     const evalAtRequired = evaluateDeal({
@@ -240,6 +271,7 @@
       bannerTerms,
       targetMarginPct,
       packQty,
+      gstRate: gst,
     });
     const evalAtNoScan = evaluateDeal({
       listPrice,
@@ -252,10 +284,12 @@
       bannerTerms,
       targetMarginPct,
       packQty,
+      gstRate: gst,
     });
 
     return {
       bannerCostPriceBeforeScan: round2(bannerCostPriceBeforeScan),
+      shelfRRPExGst: round2(shelfRRPExGst),
       bannerCostPriceNeeded: round2(bannerCostPriceNeeded),
       requiredScanDeal: round2(requiredScanDeal),
       ymGpImpactDollar: round2(evalAtRequired.profit - evalAtNoScan.profit),

@@ -135,6 +135,12 @@ const App = (function () {
   // "Direct" (or no distributor set) keeps the old behaviour: list price is
   // just whatever's stored on that banner's own pricing row.
   const DISTRIBUTOR_CODES = ["ALM", "ILG", "Paramount", "EDG", "CLG"];
+  // Every $ figure in this app (List Price, COGS, discount, scan deal, pick
+  // fee, etc.) is entered ex GST, matching how Your Mates invoices — Shelf
+  // RRP is the one exception, entered GST-inclusive since that's what's on
+  // the shelf tag. GST_RATE converts Shelf RRP to ex GST before it's
+  // compared against the (ex GST) banner cost price for Banner Margin.
+  const GST_RATE = 0.1;
   function latestDistributorPrice(distributor, skuId, asOfPeriod) {
     return latestAsOf(
       State.distributorPricing.filter((p) => p.distributor === distributor && p.skuId === skuId),
@@ -181,6 +187,7 @@ const App = (function () {
       bannerTerms: terms || {},
       targetMarginPct: targetPct,
       packQty: deal.packQty || meta.defaultPackQty || 1,
+      gstRate: GST_RATE,
     });
     return Object.assign({ deal, meta, cogsFound: !!cogs, termsFound: !!terms }, result);
   }
@@ -285,7 +292,7 @@ const App = (function () {
         topAlerts.length === 0
           ? `<p class="muted">No shortfalls found for ${esc(periodLabel(period))} 🎉</p>`
           : `<table class="table">
-        <thead><tr><th>SKU</th><th>Banner</th><th>Deal</th><th>Shelf RRP</th><th>Banner Margin</th><th>Target</th><th>Scan deal needed</th></tr></thead>
+        <thead><tr><th>SKU</th><th>Banner</th><th>Deal</th><th>Shelf RRP (inc GST)</th><th>Banner Margin</th><th>Target</th><th>Scan deal needed</th></tr></thead>
         <tbody>${topAlerts
           .map(
             (a) => `<tr>
@@ -703,7 +710,7 @@ const App = (function () {
           <button class="btn-sm btn-save-card" data-sku="${sku.id}">Save card</button>
         </div>
         <div class="sku-card-top">
-          <label>List price ($/carton)<input type="number" step="0.01" class="list-price-input" value="${effPrice}" ${shared ? "disabled" : ""}></label>
+          <label>List price ($/carton, ex GST)<input type="number" step="0.01" class="list-price-input" value="${effPrice}" ${shared ? "disabled" : ""}></label>
           <div class="impact-readout">Distributor fee (${fmtPct(distPct)}) deducted from YM Net on this SKU: <strong class="dist-fee-dollar"></strong></div>
         </div>
         ${
@@ -713,13 +720,13 @@ const App = (function () {
         }
         <div class="table-scroll">
         <table class="table table-compact deal-table">
-          <thead><tr><th>Deal</th><th>Shelf RRP</th><th>Discount $/carton</th><th>Scan deal $/unit</th><th>YM Net $</th><th>YM COGs</th><th>Profit $</th><th>YM GP%</th><th>Banner Margin</th><th>Target</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Deal</th><th>Shelf RRP (inc GST)</th><th>Discount $/carton</th><th>Scan deal $/unit</th><th>YM Net $</th><th>YM COGs</th><th>Profit $</th><th>YM GP%</th><th>Banner Margin</th><th>Target</th><th>Status</th><th></th></tr></thead>
           <tbody>
             ${pricing.deals.map((deal, i) => dealRowHTML(sku, banner, pricing, deal, i, period)).join("")}
           </tbody>
         </table>
         </div>
-        <p class="muted small">YM Net = List Price − Distributor Fee (% of list) − Banner Terms (% of list) − Discount $/carton − Scan Deal $/unit. Distributor fee and banner terms are both calculated on the full list price and don't change per deal; the discount and scan deal are deal-specific and come off last. Both the discount and the scan deal also lower the banner's effective cost price — the bigger either one is, the better the Banner Margin gets.</p>
+        <p class="muted small">YM Net = List Price − Distributor Fee (% of list) − Banner Terms (% of list) − Discount $/carton − Scan Deal $/unit. Distributor fee and banner terms are both calculated on the full list price and don't change per deal; the discount and scan deal are deal-specific and come off last. Both the discount and the scan deal also lower the banner's effective cost price — the bigger either one is, the better the Banner Margin gets — while a pick fee (set on the banner's Terms panel) works the other way, adding to their cost. Every $ figure here is ex GST except Shelf RRP, which is GST-inclusive (what's on the shelf tag) — Banner Margin converts it to ex GST first so GST itself isn't counted as margin.</p>
         <div class="add-deal-row">
           <select class="add-deal-type-select">
             <option value="">+ Add deal…</option>
@@ -856,6 +863,7 @@ const App = (function () {
         <li><span>Freight (% of COGS)</span><strong>${fmtPct(terms.freightPct)}</strong></li>
         <li><span>Direct delivery (% of COGS)</span><strong>${fmtPct(terms.directDeliveryPct)}</strong></li>
         <li><span>Keg collection (% of COGS)</span><strong>${fmtPct(terms.kegCollectionPct)}</strong></li>
+        <li><span>Pick fee ($/carton, banner pays distributor)</span><strong>${fmt$(terms.pickFeePerCarton || 0)}</strong></li>
       </ul>
       <p class="muted small">Fees / rebates (off invoice):</p>
       <ul class="kv-list">${fees || '<li class="muted">None recorded</li>'}</ul>
@@ -873,7 +881,7 @@ const App = (function () {
 
   function openEditTermsModal(banner) {
     const modalRoot = document.getElementById("modal-root");
-    const current = latestBannerTerms(banner.id, null) || { feeWaterfall: [], targetMargins: [], distributorFeePct: 0, freightPct: 0, directDeliveryPct: 0, kegCollectionPct: 0 };
+    const current = latestBannerTerms(banner.id, null) || { feeWaterfall: [], targetMargins: [], distributorFeePct: 0, freightPct: 0, directDeliveryPct: 0, kegCollectionPct: 0, pickFeePerCarton: 0 };
     // sample list price / cogs for live $ impact preview
     const samplePricing = State.pricingHistory.find((p) => p.bannerId === banner.id);
     const sampleListPrice = samplePricing ? samplePricing.listPrice : 55;
@@ -893,6 +901,7 @@ const App = (function () {
             <label>Direct delivery % of COGS<input type="number" step="0.01" id="terms-ddc" value="${((current.directDeliveryPct || 0) * 100).toFixed(2)}"></label>
           </div>
           <label>Keg collection % of COGS<input type="number" step="0.01" id="terms-keg" value="${((current.kegCollectionPct || 0) * 100).toFixed(2)}"></label>
+          <label>Pick fee $/carton <span class="muted small">(paid by the banner directly to a distributor, e.g. ALM — increases the banner's cost, lowers their margin, no effect on YM Net)</span><input type="number" step="0.01" id="terms-pickfee" value="${(current.pickFeePerCarton || 0).toFixed(2)}"></label>
           <p class="muted small" id="terms-impact-preview"></p>
           <h4>Fee / rebate waterfall (all %)</h4>
           <div id="fee-lines">${(current.feeWaterfall || []).map((f, i) => feeLineRowHTML(f, i)).join("")}</div>
@@ -919,9 +928,10 @@ const App = (function () {
     function updatePreview() {
       const distPct = parseFloat(document.getElementById("terms-distfee").value || 0) / 100;
       const freightPct = parseFloat(document.getElementById("terms-freight").value || 0) / 100;
-      document.getElementById("terms-impact-preview").textContent = `Example impact on a $${sampleListPrice.toFixed(2)} list price / $${sampleCogsVal.toFixed(2)} COGS SKU: distributor fee = ${fmt$(sampleListPrice * distPct)} deducted from YM Net (always on the full list price), freight = ${fmt$(sampleCogsVal * freightPct)} added to YM COGS.`;
+      const pickFee = parseFloat(document.getElementById("terms-pickfee").value || 0);
+      document.getElementById("terms-impact-preview").textContent = `Example impact on a $${sampleListPrice.toFixed(2)} list price / $${sampleCogsVal.toFixed(2)} COGS SKU: distributor fee = ${fmt$(sampleListPrice * distPct)} deducted from YM Net (always on the full list price), freight = ${fmt$(sampleCogsVal * freightPct)} added to YM COGS, pick fee = ${fmt$(pickFee)}/carton added to the banner's cost price (no effect on YM Net).`;
     }
-    ["terms-distfee", "terms-freight"].forEach((id) => document.getElementById(id).addEventListener("input", updatePreview));
+    ["terms-distfee", "terms-freight", "terms-pickfee"].forEach((id) => document.getElementById(id).addEventListener("input", updatePreview));
     updatePreview();
 
     document.getElementById("terms-cancel").onclick = () => (modalRoot.innerHTML = "");
@@ -957,6 +967,7 @@ const App = (function () {
         freightPct: parseFloat(document.getElementById("terms-freight").value || 0) / 100,
         directDeliveryPct: parseFloat(document.getElementById("terms-ddc").value || 0) / 100,
         kegCollectionPct: parseFloat(document.getElementById("terms-keg").value || 0) / 100,
+        pickFeePerCarton: parseFloat(document.getElementById("terms-pickfee").value || 0),
         targetMargins,
         notes: document.getElementById("terms-notes").value,
       };
@@ -1080,7 +1091,7 @@ const App = (function () {
         rows.length === 0
           ? `<p class="muted">No pricing recorded for this SKU in ${esc(periodLabel(period))} yet.</p>`
           : `<table class="table">
-        <thead><tr><th>Banner</th><th>Group</th><th>Deal shown</th><th>List Price</th><th>Shelf RRP</th><th>YM Net $</th><th>YM COGs</th><th>Profit $</th><th>YM GP%</th><th>Banner Margin</th><th>Target</th></tr></thead>
+        <thead><tr><th>Banner</th><th>Group</th><th>Deal shown</th><th>List Price (ex GST)</th><th>Shelf RRP (inc GST)</th><th>YM Net $</th><th>YM COGs</th><th>Profit $</th><th>YM GP%</th><th>Banner Margin</th><th>Target</th></tr></thead>
         <tbody>${rows
           .map(
             ({ banner, pricing, everydayDeal, m }) => `<tr>
