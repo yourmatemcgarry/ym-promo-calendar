@@ -1559,7 +1559,7 @@ const App = (function () {
         <div class="table-scroll"><table class="table">
           <thead><tr>
             <th data-sort="banner">Banner</th><th data-sort="sku">SKU</th><th data-sort="cycleInstance">Cycle</th>
-            <th data-sort="promoName">Promo</th><th data-sort="startDate">Start</th><th data-sort="endDate">End</th>
+            <th data-sort="promoName">Promo</th><th>Shelf RRP (inc GST)</th><th data-sort="startDate">Start</th><th data-sort="endDate">End</th>
             <th data-sort="targetMarginPct">Target %</th><th data-sort="actualMarginPct">Actual %</th>
             <th data-sort="status">Status</th><th></th>
           </tr></thead>
@@ -1662,7 +1662,7 @@ const App = (function () {
       return `<div class="cal-bar cal-status-${d.status}" data-deal="${d.id}" style="left:${left}px;width:${width}px;top:${top}px;background:${bg};border-left-color:${calMarginColor(mStatus)};">
         <span class="cal-handle cal-handle-left" data-handle="left"></span>
         <span class="cal-badge">${calStatusBadge(d.status)}</span>
-        <span>${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</span>
+        <span>${esc(disp.promoName)}${disp.linked && disp.shelfRRP != null ? ` · ${fmt$(disp.shelfRRP)}` : ""}${disp.linked ? " 🔗" : ""}</span>
         <span class="cal-handle cal-handle-right" data-handle="right"></span>
       </div>`;
     }
@@ -1864,7 +1864,7 @@ const App = (function () {
         `<div class="cal-muted">${esc(banner ? banner.name : "")} · ${esc(deal.cycleInstance || "")}</div>` +
         `<div class="cal-row"><span>SKU</span><span>${esc(sku ? sku.name : "")}</span></div>` +
         `<div class="cal-row"><span>Dates</span><span>${deal.startDate} → ${deal.endDate}</span></div>` +
-        (disp.shelfRRP != null ? `<div class="cal-row"><span>Shelf RRP</span><span>${fmt$(disp.shelfRRP)}</span></div>` : "") +
+        (disp.shelfRRP != null ? `<div class="cal-row"><span>Shelf RRP (inc GST)</span><span>${fmt$(disp.shelfRRP)}</span></div>` : "") +
         `<div class="cal-row"><span>Target margin</span><span>${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "—"}</span></div>` +
         `<div class="cal-row"><span>Actual/banner margin</span><span>${disp.actualMarginPct != null ? fmtPct(disp.actualMarginPct) : "—"} (${mLabel})</span></div>` +
         `<div class="cal-row"><span>Status</span><span>${esc(deal.status)}</span></div>`;
@@ -1915,7 +1915,7 @@ const App = (function () {
       });
       const tbody = document.getElementById("cal-table-body");
       if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:20px;">No deals match the current filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="muted" style="text-align:center;padding:20px;">No deals match the current filters.</td></tr>';
         return;
       }
       tbody.innerHTML = rows
@@ -1928,6 +1928,7 @@ const App = (function () {
           <td>${sku ? skuThumbHTML(sku, "sm") : ""}${esc(sku ? sku.name : "?")}</td>
           <td>${esc(d.cycleInstance || "")}</td>
           <td>${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</td>
+          <td>${disp.shelfRRP != null ? fmt$(disp.shelfRRP) : "—"}</td>
           <td>${d.startDate}</td>
           <td>${d.endDate}</td>
           <td>${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "—"}</td>
