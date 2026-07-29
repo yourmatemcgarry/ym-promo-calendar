@@ -1222,23 +1222,27 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": 0.42
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
-     "targetPct": 0.38
-    },
-    {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo1-mp",
+     "targetPct": 0.38
+    },
+    {
+     "dealTypeId": "promo1-ctn",
+     "targetPct": null
+    },
+    {
+     "dealTypeId": "promo2-mp",
+     "targetPct": 0.38
+    },
+    {
+     "dealTypeId": "promo2-ctn",
      "targetPct": null
     }
    ],
@@ -1275,23 +1279,27 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": 0.43
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
-     "targetPct": 0.42
-    },
-    {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo1-mp",
+     "targetPct": 0.42
+    },
+    {
+     "dealTypeId": "promo1-ctn",
+     "targetPct": null
+    },
+    {
+     "dealTypeId": "promo2-mp",
+     "targetPct": 0.42
+    },
+    {
+     "dealTypeId": "promo2-ctn",
      "targetPct": null
     }
    ],
@@ -1309,23 +1317,27 @@ window.SEED_DATA = {
    "feeWaterfall": [],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": 0.4
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
-     "targetPct": 0.35
-    },
-    {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-ctn",
      "targetPct": 0.18
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo1-mp",
+     "targetPct": 0.35
+    },
+    {
+     "dealTypeId": "promo1-ctn",
+     "targetPct": 0.15
+    },
+    {
+     "dealTypeId": "promo2-mp",
+     "targetPct": 0.35
+    },
+    {
+     "dealTypeId": "promo2-ctn",
      "targetPct": 0.15
     }
    ],
@@ -1343,23 +1355,27 @@ window.SEED_DATA = {
    "feeWaterfall": [],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": 0.4
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
-     "targetPct": 0.35
-    },
-    {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-ctn",
      "targetPct": 0.18
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo1-mp",
+     "targetPct": 0.35
+    },
+    {
+     "dealTypeId": "promo1-ctn",
+     "targetPct": 0.15
+    },
+    {
+     "dealTypeId": "promo2-mp",
+     "targetPct": 0.35
+    },
+    {
+     "dealTypeId": "promo2-ctn",
      "targetPct": 0.15
     }
    ],
@@ -1384,34 +1400,28 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": 0.35
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
-     "targetPct": 0.22
-    },
-    {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-ctn",
      "targetPct": 0.15
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-mp",
+     "targetPct": 0.22
+    },
+    {
+     "dealTypeId": "promo-ctn",
      "targetPct": 0.125
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
-     "targetPct": 0.22
+     "dealTypeId": "twofor",
+     "targetPct": 0.15
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
-     "targetPct": 0.15
+     "dealTypeId": "gift",
+     "targetPct": 0.22
     }
    ],
    "notes": "Distributor Fee 5% and Banner Term 6% per confirmed Star Liquor pricing sheet (FY26 H2) and your stated standard rate. Source file actually shows Banner Term varying 4.5%-6% by SKU/distributor route (ALM vs Direct) - 6% used here as the standardised go-forward rate; adjust here if you want to track the exact historical per-SKU rate instead.",
@@ -1441,34 +1451,28 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": 0.38
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
+     "targetPct": null
+    },
+    {
+     "dealTypeId": "promo-mp",
      "targetPct": 0.3
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
-     "targetPct": null
-    },
-    {
-     "packType": "2for$",
-     "dealType": "promo",
-     "targetPct": null
+     "dealTypeId": "gift",
+     "targetPct": 0.3
     }
    ],
    "notes": "Rebates & pick fee from Margin Expectations Source of Truth sheet.",
@@ -1498,33 +1502,27 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -1555,33 +1553,27 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -1612,33 +1604,27 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -1669,34 +1655,28 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": 0.35
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
-     "targetPct": 0.25
-    },
-    {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-ctn",
      "targetPct": 0.15
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-mp",
+     "targetPct": 0.25
+    },
+    {
+     "dealTypeId": "promo-ctn",
      "targetPct": 0.1
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
-     "targetPct": 0.27
+     "dealTypeId": "twofor",
+     "targetPct": 0.23
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
-     "targetPct": 0.23
+     "dealTypeId": "gift",
+     "targetPct": 0.25
     }
    ],
    "notes": "Rebates & pick fee from Margin Expectations Source of Truth sheet.",
@@ -1726,34 +1706,28 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": 0.35
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
-     "targetPct": 0.3
-    },
-    {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-ctn",
      "targetPct": 0.16
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
-     "targetPct": 0.12
-    },
-    {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": 0.3
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
+     "targetPct": 0.12
+    },
+    {
+     "dealTypeId": "twofor",
      "targetPct": 0.25
+    },
+    {
+     "dealTypeId": "gift",
+     "targetPct": 0.3
     }
    ],
    "notes": "Rebates & pick fee from Margin Expectations Source of Truth sheet.",
@@ -1783,33 +1757,27 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -1827,33 +1795,27 @@ window.SEED_DATA = {
    "feeWaterfall": [],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -1871,33 +1833,27 @@ window.SEED_DATA = {
    "feeWaterfall": [],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -1915,33 +1871,27 @@ window.SEED_DATA = {
    "feeWaterfall": [],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -1959,33 +1909,27 @@ window.SEED_DATA = {
    "feeWaterfall": [],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -2003,33 +1947,27 @@ window.SEED_DATA = {
    "feeWaterfall": [],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],
@@ -2054,33 +1992,27 @@ window.SEED_DATA = {
    ],
    "targetMargins": [
     {
-     "packType": "multipack",
-     "dealType": "everyday",
+     "dealTypeId": "everyday-mp",
      "targetPct": null
     },
     {
-     "packType": "multipack",
-     "dealType": "promo",
+     "dealTypeId": "everyday-ctn",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "everyday",
+     "dealTypeId": "promo-mp",
      "targetPct": null
     },
     {
-     "packType": "carton",
-     "dealType": "promo",
+     "dealTypeId": "promo-ctn",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "everyday",
+     "dealTypeId": "twofor",
      "targetPct": null
     },
     {
-     "packType": "2for$",
-     "dealType": "promo",
+     "dealTypeId": "gift",
      "targetPct": null
     }
    ],

@@ -77,9 +77,11 @@ sheet, see the worked example below):
 - **Freight / direct delivery / keg collection %** — each a % of that SKU's
   Product COGS, so a heavier/more expensive SKU automatically carries a
   bigger $ freight cost from the same %.
-- **Target margins** — by pack type (multipack/carton/2-for-$) and deal
-  type (everyday/promo). Set on **Manage deal types**, not the Terms panel
-  (see below) — since deal types are what determine which target applies.
+- **Target margins** — every individual deal type gets its own target,
+  set right alongside it on **Manage deal types** (not the Terms panel).
+  Two deal types don't have to share a target just because they're both
+  "carton / promo" — Promo 1 (Carton) and Promo 2 (Carton) can each have
+  their own.
 
 **Worked example** (Star Liquor, Larry, 16-pack carton, routed via ALM):
 List Price $56.50, minus Distributor Fee 5% ($2.83), minus Banner Term
@@ -120,12 +122,14 @@ it.
 the same place.** Click **Manage deal types** on any banner page to define
 exactly which deals that banner runs (e.g. Endeavour might be Everyday +
 Promo 1 + Promo 2, each as Multipack or Carton; an independent might add
-2-for-$ or a Gift Promo) — and, right below that, set the target margin %
-for each pack type / deal type combination those deal types use. Each SKU
-card then offers only that banner's deal types in its "+ Add deal"
-dropdown, and the pack type/deal type on each is what drives which target
-margin applies (so several deal types sharing "carton / promo" all share
-that one target). The **Terms** panel is now only distributor fee, freight,
+2-for-$ or a Gift Promo) — each row there has its own **Target %** field
+right alongside its label/pack type/deal type/units-per-carton, so every
+deal type you add gets its own target, however many you add. Two deal
+types don't have to share a target just because they're both "carton /
+promo" — Promo 1 (Carton) and Promo 2 (Carton) can be set differently. Each
+SKU card then offers only that banner's deal types in its "+ Add deal"
+dropdown, and each deal on a SKU card is checked against its own deal
+type's target. The **Terms** panel is now only distributor fee, freight,
 pick fee and the fee/rebate waterfall — no target margins there anymore.
 
 **Each banner page lists every SKU as its own card**, list price at the

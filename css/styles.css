@@ -197,10 +197,24 @@ textarea { min-height: 60px; resize: vertical; }
 
 .fee-line-row, .deal-line-row { display: grid; grid-template-columns: 2fr 1.4fr 1fr 1fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
 .deal-line-row { grid-template-columns: 2fr 1.2fr 1fr 1fr 1fr auto; }
-.deal-type-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+.deal-type-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; gap: 6px; margin-bottom: 6px; align-items: center; }
 .fee-line-row input, .fee-line-row select, .deal-line-row input, .deal-line-row select, .deal-type-row input, .deal-type-row select { margin: 0; }
 
 .sku-card { }
+/* Shows which banner this SKU card belongs to — mainly so a screenshot of
+   a single card (e.g. shared in a chat/email about one deal) still says
+   which banner it's for, without needing the page header in frame. */
+.sku-card-banner-tag {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--muted);
+  background: var(--bg);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-bottom: 10px;
+}
+.sku-card-banner-tag strong { color: var(--ink); font-weight: 700; text-transform: none; letter-spacing: normal; }
 .sku-card-top { display: flex; align-items: flex-end; gap: 20px; margin-bottom: 12px; flex-wrap: wrap; }
 .sku-card-top label { margin: 0; width: 200px; }
 .sku-card-top .impact-readout { font-size: 13px; color: var(--muted); padding-bottom: 8px; }

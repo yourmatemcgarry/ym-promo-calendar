@@ -123,9 +123,14 @@ const App = (function () {
       .slice()
       .sort((a, b) => periodIndex(a.period) - periodIndex(b.period));
   }
-  function targetMarginFor(bannerTerms, packType, dealType) {
-    if (!bannerTerms) return null;
-    const m = bannerTerms.targetMargins.find((t) => t.packType === packType && t.dealType === dealType);
+  // Every configured deal type gets its own target margin — not shared by
+  // pack type / deal type combo — so two "carton / promo" deal types (say,
+  // Promo 1 (Carton) and Promo 2 (Carton)) can have different targets.
+  // Keyed by dealTypeId; legacy/custom deals with no matching deal type
+  // (deal.dealTypeId not set, or removed since) simply have no target.
+  function targetMarginForDealType(bannerTerms, dealTypeId) {
+    if (!bannerTerms || !dealTypeId) return null;
+    const m = (bannerTerms.targetMargins || []).find((t) => t.dealTypeId === dealTypeId);
     return m ? m.targetPct : null;
   }
 
@@ -174,7 +179,7 @@ const App = (function () {
     const cogs = latestCogs(sku.id, asOfPeriod);
     const terms = latestBannerTerms(banner.id, asOfPeriod);
     const meta = dealMeta(banner, deal);
-    const targetPct = targetMarginFor(terms, meta.packType, meta.dealType);
+    const targetPct = targetMarginForDealType(terms, deal.dealTypeId);
     const listPrice = effectiveListPrice(sku, banner, asOfPeriod, pricingRow);
     const result = Calc.evaluateDeal({
       listPrice,
@@ -662,7 +667,7 @@ const App = (function () {
         </div>
         <div class="card">
           <div class="card-header-row"><h3>Target margins</h3><button class="btn-sm" id="manage-deal-types">Manage deal types</button></div>
-          ${renderTargetMargins(terms)}
+          ${renderTargetMargins(terms, banner)}
         </div>
       </div>
 
@@ -705,6 +710,7 @@ const App = (function () {
     const dp = shared ? latestDistributorPrice(banner.distributor, sku.id, period) : null;
     return `
       <div class="card sku-card" data-sku="${sku.id}">
+        <div class="sku-card-banner-tag" style="border-left-color:${esc(banner.badgeColor || "#8a9490")};">${badgeHTML(banner, "sm")}<strong>${esc(banner.name)}</strong></div>
         <div class="card-header-row">
           <h3>${skuThumbHTML(sku)}${esc(sku.name)} <span class="muted small">${esc(sku.packFormat)}</span></h3>
           <button class="btn-sm btn-save-card" data-sku="${sku.id}">Save card</button>
@@ -876,11 +882,17 @@ const App = (function () {
     `;
   }
 
-  function renderTargetMargins(terms) {
-    if (!terms) return `<p class="muted">No target margins recorded yet.</p>`;
+  function renderTargetMargins(terms, banner) {
+    const dealTypes = (banner && banner.dealTypes) || [];
+    if (dealTypes.length === 0) return `<p class="muted">No deal types configured yet — add one on <strong>Manage deal types</strong> first.</p>`;
     return `<table class="table table-compact">
-      <thead><tr><th>Pack</th><th>Deal</th><th>Target GP%</th></tr></thead>
-      <tbody>${terms.targetMargins.map((t) => `<tr><td>${esc(t.packType)}</td><td>${esc(t.dealType)}</td><td>${t.targetPct != null ? fmtPct(t.targetPct) : '<span class="muted">Not set</span>'}</td></tr>`).join("")}</tbody>
+      <thead><tr><th>Deal type</th><th>Pack</th><th>Deal</th><th>Target GP%</th></tr></thead>
+      <tbody>${dealTypes
+        .map((dt) => {
+          const t = terms ? (terms.targetMargins || []).find((tm) => tm.dealTypeId === dt.id) : null;
+          return `<tr><td>${esc(dt.label || "(untitled)")}</td><td>${esc(dt.packType)}</td><td>${esc(dt.dealType)}</td><td>${t && t.targetPct != null ? fmtPct(t.targetPct) : '<span class="muted">Not set</span>'}</td></tr>`;
+        })
+        .join("")}</tbody>
     </table>`;
   }
 
@@ -993,29 +1005,24 @@ const App = (function () {
     const modalRoot = document.getElementById("modal-root");
     const types = (banner.dealTypes || []).map((d) => Object.assign({}, d));
     const currentTerms = latestBannerTerms(banner.id, null) || { feeWaterfall: [], targetMargins: [], distributorFeePct: 0, freightPct: 0, directDeliveryPct: 0, kegCollectionPct: 0, pickFeePerCarton: 0 };
+    function targetForType(t) {
+      const m = (currentTerms.targetMargins || []).find((tm) => tm.dealTypeId === t.id);
+      return m && m.targetPct != null ? (m.targetPct * 100).toFixed(1) : "";
+    }
     function render() {
       modalRoot.innerHTML = `
         <div class="modal-backdrop">
           <div class="modal modal-wide">
             <h3>Deal / promo types — ${esc(banner.name)}</h3>
-            <p class="muted small">These are the deal types available when adding pricing for a SKU at this banner. Pack type + deal type determine which target margin applies below.</p>
-            <div id="deal-type-lines">${types.map((t, i) => dealTypeRowHTML(t, i)).join("")}</div>
-            <button class="btn-sm" id="add-deal-type">+ Add deal type</button>
-            <h4>Target margins</h4>
-            <p class="muted small">Shared by pack type + deal type — e.g. every deal type above that's "carton / promo" uses the same "carton / promo" target below.</p>
-            <label>Save target margins as period
+            <p class="muted small">These are the deal types available when adding pricing for a SKU at this banner. Every deal type gets its own target margin — set it right alongside it, no two have to share one.</p>
+            <label>Save as period
               <select id="dt-period">${State.periods.map((p) => `<option value="${p.id}" ${p.id === State.currentPeriod ? "selected" : ""}>${esc(p.label)}</option>`).join("")}</select>
             </label>
-            <div id="margin-lines">${["multipack", "carton", "2for$"]
-              .flatMap((pack) =>
-                ["everyday", "promo"].map((deal) => {
-                  const t = (currentTerms.targetMargins || []).find((t) => t.packType === pack && t.dealType === deal);
-                  return `<label class="inline-label">${pack} / ${deal} target %
-                    <input type="number" step="0.1" class="margin-input" data-pack="${pack}" data-deal="${deal}" value="${t && t.targetPct != null ? (t.targetPct * 100).toFixed(1) : ""}" placeholder="not set">
-                  </label>`;
-                })
-              )
-              .join("")}</div>
+            <div class="deal-type-row deal-type-row-header muted small">
+              <span>Label</span><span>Pack type</span><span>Deal type</span><span>Units/carton</span><span>Target %</span><span></span>
+            </div>
+            <div id="deal-type-lines">${types.map((t, i) => dealTypeRowHTML(t, i, targetForType(t))).join("")}</div>
+            <button class="btn-sm" id="add-deal-type">+ Add deal type</button>
             <div class="modal-actions">
               <button class="btn-secondary" id="dt-cancel">Cancel</button>
               <button class="btn-primary" id="dt-save">Save</button>
@@ -1034,7 +1041,7 @@ const App = (function () {
         })
       );
       document.getElementById("dt-save").onclick = async () => {
-        const rows = Array.from(document.querySelectorAll(".deal-type-row"));
+        const rows = Array.from(document.querySelectorAll("#deal-type-lines .deal-type-row"));
         const newTypes = rows.map((row, i) => ({
           id: types[i].id,
           label: row.querySelector(".dt-label").value,
@@ -1050,13 +1057,13 @@ const App = (function () {
         // Target margins live inside the banner's versioned Terms record —
         // save a new version carrying forward every other term field
         // unchanged (fees, distributor %, pick fee, etc.), only replacing
-        // targetMargins + the period being saved to.
+        // targetMargins + the period being saved to. Each deal type row's
+        // own Target % input maps 1:1 to its deal type id.
         const period = document.getElementById("dt-period").value;
-        const targetMargins = Array.from(document.querySelectorAll(".margin-input")).map((inp) => ({
-          packType: inp.dataset.pack,
-          dealType: inp.dataset.deal,
-          targetPct: inp.value === "" ? null : parseFloat(inp.value) / 100,
-        }));
+        const targetMargins = rows.map((row, i) => {
+          const v = row.querySelector(".dt-target").value;
+          return { dealTypeId: types[i].id, targetPct: v === "" ? null : parseFloat(v) / 100 };
+        });
         const termsRecord = Object.assign({}, currentTerms, { bannerId: banner.id, period, targetMargins });
         delete termsRecord.id;
         const existingTerms = State.bannerTermsHistory.find((t) => t.bannerId === banner.id && t.period === period);
@@ -1074,7 +1081,7 @@ const App = (function () {
     render();
   }
 
-  function dealTypeRowHTML(t, i) {
+  function dealTypeRowHTML(t, i, targetPctStr) {
     return `<div class="deal-type-row" data-i="${i}">
       <input type="text" class="dt-label" placeholder="Label (e.g. Promo 1 (Carton))" value="${esc(t.label)}">
       <select class="dt-pack">
@@ -1087,6 +1094,7 @@ const App = (function () {
         <option value="promo" ${t.dealType === "promo" ? "selected" : ""}>promo</option>
       </select>
       <input type="number" step="1" class="dt-qty" placeholder="units/carton" value="${t.defaultPackQty}">
+      <input type="number" step="0.1" class="dt-target" placeholder="target %" title="Target margin % for this deal type" value="${targetPctStr != null ? targetPctStr : ""}">
       <button class="btn-xs remove-deal-type" data-i="${i}">✕</button>
     </div>`;
   }
