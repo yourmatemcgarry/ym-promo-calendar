@@ -1,14 +1,17 @@
 :root {
-  --bg: #f6f4ef;
+  --bg: #f5f7f5;
   --card-bg: #ffffff;
-  --ink: #2a231b;
-  --muted: #7a6f60;
-  --border: #e4ddce;
-  --accent: #b5652d;
-  --accent-dark: #8a4a1f;
-  --pos: #2f6f4f;
-  --neg: #b3261e;
-  --warn-bg: #fdf3e6;
+  --ink: #17302e;
+  --muted: #667b78;
+  --border: #dde6e3;
+  --accent: #0f7d74;
+  --accent-dark: #0a5850;
+  --accent-warm: #f6b333;
+  --accent-warm-dark: #c98d17;
+  --coral: #e2483d;
+  --pos: #2f8f6a;
+  --neg: #e2483d;
+  --warn-bg: #fdf3e0;
   --radius: 10px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -26,9 +29,9 @@ body {
 a { color: var(--accent-dark); }
 
 .app-header {
-  background: linear-gradient(135deg, #3a2a1a, #5a3a20);
+  background: linear-gradient(135deg, #0a5850, #0f7d74);
   color: #fff;
-  padding: 14px 24px;
+  padding: 10px 24px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -37,12 +40,24 @@ a { color: var(--accent-dark); }
   top: 0;
   z-index: 20;
 }
-.brand { font-size: 18px; font-weight: 700; white-space: nowrap; }
-.brand .muted { color: #d9c9b8; font-weight: 400; }
+.brand { font-size: 18px; font-weight: 700; white-space: nowrap; display: flex; align-items: center; gap: 10px; }
+.brand-logo { height: 34px; width: auto; display: block; }
+.brand .muted { color: #cdeae5; font-weight: 400; }
+
+/* Small circular product photo / colour-badge fallback, used everywhere a
+   SKU or banner is referenced (cards, tables, calendar, selectors). */
+.sku-thumb, .sku-thumb-fallback, .badge-circle {
+  width: 26px; height: 26px; border-radius: 50%; flex: none; display: inline-flex;
+  align-items: center; justify-content: center; vertical-align: middle; margin-right: 6px;
+}
+.sku-thumb { object-fit: cover; border: 1px solid var(--border); background: #fff; }
+.sku-thumb-fallback, .badge-circle { color: #fff; font-weight: 700; font-size: 10px; }
+.sku-thumb-lg, .badge-circle-lg { width: 44px; height: 44px; font-size: 14px; margin-right: 10px; }
+.sku-thumb-sm, .badge-circle-sm { width: 18px; height: 18px; font-size: 8px; margin-right: 4px; }
 
 .nav { display: flex; flex-wrap: wrap; gap: 4px; }
 .nav-link {
-  color: #f0e6d8;
+  color: #d9f0ec;
   text-decoration: none;
   padding: 7px 12px;
   border-radius: 8px;
@@ -121,10 +136,10 @@ h4 { font-size: 13.5px; margin: 14px 0 6px; color: var(--muted); text-transform:
 
 .table { width: 100%; border-collapse: collapse; margin-bottom: 16px; background: var(--card-bg); border-radius: var(--radius); overflow: hidden; }
 .table th, .table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
-.table th { background: #f0ebe0; font-weight: 600; color: var(--ink); font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
-.table tbody tr:hover { background: #faf7f1; }
+.table th { background: #eaf5f3; font-weight: 600; color: var(--ink); font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
+.table tbody tr:hover { background: #f4faf8; }
 .table-compact th, .table-compact td { padding: 6px 10px; }
-.col-highlight { background: #fbeee0; font-weight: 600; }
+.col-highlight { background: var(--warn-bg); font-weight: 600; }
 
 .kv-list { list-style: none; margin: 0; padding: 0; }
 .kv-list li { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed var(--border); font-size: 13.5px; }
@@ -168,7 +183,7 @@ textarea { min-height: 60px; resize: vertical; }
 .period-control select { width: auto; }
 
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(30,20,10,0.45);
+  position: fixed; inset: 0; background: rgba(10,20,18,0.45);
   display: flex; align-items: flex-start; justify-content: center;
   padding: 40px 16px; overflow-y: auto; z-index: 100;
 }
@@ -206,7 +221,7 @@ textarea { min-height: 60px; resize: vertical; }
 .chart-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
 .loading { padding: 60px; text-align: center; color: var(--muted); }
-.err { white-space: pre-wrap; background: #fdf0ee; padding: 12px; border-radius: 8px; color: var(--neg); font-size: 12px; }
+.err { white-space: pre-wrap; background: #fbeae8; padding: 12px; border-radius: 8px; color: var(--neg); font-size: 12px; }
 
 /* ---------------------------------------------------------------------
    Promo Calendar — a Gantt-style timeline (frozen banner/SKU rail next to
@@ -278,7 +293,7 @@ textarea { min-height: 60px; resize: vertical; }
 .cal-status-complete { opacity: 1; }
 .cal-badge { font-weight: 700; margin-right: 4px; font-size: 9.5px; background: rgba(255,255,255,.65); padding: 0 3px; border-radius: 3px; }
 
-.cal-tooltip { position: fixed; z-index: 200; background: #2a231b; color: #fff; font-size: 12px; padding: 8px 10px; border-radius: 6px; max-width: 260px; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.25); line-height: 1.5; }
+.cal-tooltip { position: fixed; z-index: 200; background: #17302e; color: #fff; font-size: 12px; padding: 8px 10px; border-radius: 6px; max-width: 260px; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.25); line-height: 1.5; }
 .cal-tooltip b { color: #fff; }
 .cal-tooltip .cal-row { display: flex; justify-content: space-between; gap: 10px; }
 .cal-tooltip .cal-muted, .cal-muted { color: #9ca3af; }

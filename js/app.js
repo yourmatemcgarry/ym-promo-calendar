@@ -13,6 +13,7 @@ const App = (function () {
     bannerTermsHistory: [],
     pricingHistory: [],
     calendarDeals: [],
+    distributorPricing: [],
     periods: [],
     currentPeriod: null,
     viewPeriod: null, // period being viewed/edited across the app (defaults to currentPeriod)
@@ -32,6 +33,25 @@ const App = (function () {
   function esc(s) {
     if (s == null) return "";
     return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  // Small round product photo (falls back to a plain grey circle if the SKU
+  // has no image on file or the hotlinked image fails to load — e.g. a SKU
+  // no longer sold on yourmatesbrewing.com).
+  function skuThumbHTML(sku, size) {
+    const cls = size === "lg" ? "sku-thumb-lg" : size === "sm" ? "sku-thumb-sm" : "";
+    if (sku && sku.image) {
+      return `<img class="sku-thumb ${cls}" src="${esc(sku.image)}" alt="" onerror="this.outerHTML='<span class=&quot;sku-thumb-fallback ${cls}&quot; style=&quot;background:#8a9490&quot;>${esc((sku.name || "?").slice(0, 2).toUpperCase())}</span>'">`;
+    }
+    const initials = esc((sku && sku.name ? sku.name : "?").slice(0, 2).toUpperCase());
+    return `<span class="sku-thumb-fallback ${cls}" style="background:#8a9490">${initials}</span>`;
+  }
+  // Colour-badge for a banner or banner-group — used everywhere a retailer
+  // reference shows up instead of scraping/embedding third-party logos.
+  function badgeHTML(entity, size) {
+    const cls = size === "lg" ? "badge-circle-lg" : size === "sm" ? "badge-circle-sm" : "";
+    const color = (entity && entity.badgeColor) || "#8a9490";
+    const initials = esc((entity && entity.badgeInitials) || (entity && entity.name ? entity.name.slice(0, 2).toUpperCase() : "?"));
+    return `<span class="badge-circle ${cls}" style="background:${esc(color)}">${initials}</span>`;
   }
   function el(html) {
     const t = document.createElement("template");
@@ -108,6 +128,30 @@ const App = (function () {
     const m = bannerTerms.targetMargins.find((t) => t.packType === packType && t.dealType === dealType);
     return m ? m.targetPct : null;
   }
+
+  // Independent-banner list pricing can be shared across every banner routed
+  // through the same distributor (set once per SKU/distributor on the SKU
+  // Tool page, instead of re-entering the same figure on every banner card).
+  // "Direct" (or no distributor set) keeps the old behaviour: list price is
+  // just whatever's stored on that banner's own pricing row.
+  const DISTRIBUTOR_CODES = ["ALM", "ILG", "Paramount", "EDG", "CLG"];
+  function latestDistributorPrice(distributor, skuId, asOfPeriod) {
+    return latestAsOf(
+      State.distributorPricing.filter((p) => p.distributor === distributor && p.skuId === skuId),
+      asOfPeriod
+    );
+  }
+  function usesSharedDistributorPricing(banner) {
+    return !!(banner && banner.groupId === "independent" && banner.distributor && DISTRIBUTOR_CODES.includes(banner.distributor));
+  }
+  /** What list price actually applies right now for this SKU/banner — from the shared distributor price if one's set, else the banner's own pricing row. */
+  function effectiveListPrice(sku, banner, asOfPeriod, pricingRow) {
+    if (usesSharedDistributorPricing(banner)) {
+      const dp = latestDistributorPrice(banner.distributor, sku.id, asOfPeriod);
+      if (dp) return dp.listPrice;
+    }
+    return pricingRow ? pricingRow.listPrice : 0;
+  }
   /** Resolve packType/dealType/label for a deal, preferring the banner's configured deal type. */
   function dealMeta(banner, deal) {
     const dt = banner && banner.dealTypes ? banner.dealTypes.find((d) => d.id === deal.dealTypeId) : null;
@@ -125,8 +169,9 @@ const App = (function () {
     const terms = latestBannerTerms(banner.id, asOfPeriod);
     const meta = dealMeta(banner, deal);
     const targetPct = targetMarginFor(terms, meta.packType, meta.dealType);
+    const listPrice = effectiveListPrice(sku, banner, asOfPeriod, pricingRow);
     const result = Calc.evaluateDeal({
-      listPrice: pricingRow.listPrice,
+      listPrice,
       discountPerCarton: deal.discountPerCarton || 0,
       feeWaterfall: terms ? terms.feeWaterfall : [],
       distributorFeePct: terms ? terms.distributorFeePct : 0,
@@ -212,7 +257,7 @@ const App = (function () {
       .map((g) => {
         const banners = State.banners.filter((b) => b.groupId === g.id);
         return `<a class="card card-link" href="#/banner/${g.id}">
-        <h3>${esc(g.shortName)}</h3>
+        <h3>${badgeHTML(g)} ${esc(g.shortName)}</h3>
         <p class="muted">${banners.length} banner${banners.length !== 1 ? "s" : ""}</p>
       </a>`;
       })
@@ -244,7 +289,7 @@ const App = (function () {
         <tbody>${topAlerts
           .map(
             (a) => `<tr>
-          <td>${esc(a.sku.name)}</td><td>${esc(a.banner.name)}</td><td>${esc(a.deal.label)}</td>
+          <td>${skuThumbHTML(a.sku, "sm")}${esc(a.sku.name)}</td><td>${badgeHTML(a.banner, "sm")}${esc(a.banner.name)}</td><td>${esc(a.deal.label)}</td>
           <td>${fmt$(a.deal.shelfRRP)}</td>
           <td class="neg">${fmtPct(a.m.bannerMarginPct)}</td>
           <td>${fmtPct(a.m.targetMarginPct)}</td>
@@ -285,7 +330,7 @@ const App = (function () {
           ${rows
             .map(
               (r) => `<tr>
-            <td><strong>${esc(r.sku.name)}</strong><div class="muted small">${esc(r.sku.style)}</div></td>
+            <td>${skuThumbHTML(r.sku)}<strong>${esc(r.sku.name)}</strong><div class="muted small">${esc(r.sku.style)}</div></td>
             <td>${esc(r.sku.packFormat)}</td>
             <td>${esc(r.sku.channel)}</td>
             ${State.periods
@@ -295,7 +340,7 @@ const App = (function () {
                 return `<td class="${isCurrentView ? "col-highlight" : ""}">${entry ? fmt$(entry.productCogs) : '<span class="muted">—</span>'}</td>`;
               })
               .join("")}
-            <td><button class="btn-sm" data-add-cogs="${r.sku.id}">+ Add period</button></td>
+            <td><button class="btn-sm" data-add-cogs="${r.sku.id}">Edit</button></td>
           </tr>`
             )
             .join("")}
@@ -314,7 +359,7 @@ const App = (function () {
     modalRoot.innerHTML = `
       <div class="modal-backdrop">
         <div class="modal">
-          <h3>Add COGS entry — ${esc(sku.name)} (${esc(sku.packFormat)})</h3>
+          <h3>Edit COGS — ${esc(sku.name)} (${esc(sku.packFormat)})</h3>
           <label>Period
             <select id="cogs-period">${State.periods.map((p) => `<option value="${p.id}" ${p.id === nextPeriodDefault ? "selected" : ""}>${esc(p.label)}</option>`).join("")}</select>
           </label>
@@ -348,6 +393,235 @@ const App = (function () {
     };
   }
 
+  // ------------------------------------------------------------ SKU Tool
+  function slugify(s) {
+    return (s || "")
+      .toString()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-+|-+$)/g, "");
+  }
+  function uniqueSkuId(name, packFormat) {
+    const base = slugify(name + "-" + (packFormat || "")).slice(0, 40) || "sku";
+    let id = base,
+      n = 1;
+    while (State.skus.some((s) => s.id === id)) {
+      n++;
+      id = base + "-" + n;
+    }
+    return id;
+  }
+
+  route("sku-tool", async (rest, main) => {
+    const period = State.viewPeriod;
+    const skusSorted = State.skus.slice().sort((a, b) => a.name.localeCompare(b.name) || (a.packFormat || "").localeCompare(b.packFormat || ""));
+    const independentBanners = State.banners
+      .filter((b) => b.groupId === "independent")
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    function skuRowHtml(sku) {
+      return `<tr>
+        <td>${skuThumbHTML(sku)}<strong>${esc(sku.name)}</strong><div class="muted small">${esc(sku.style || "")}</div></td>
+        <td>${esc(sku.packFormat || "")}</td>
+        <td>${sku.unitsPerCarton || 1}</td>
+        <td>${esc(sku.channel || "")}</td>
+        <td>${esc(sku.category || "")}</td>
+        <td><button class="btn-xs" data-edit-sku="${sku.id}">Edit</button> <button class="btn-xs" data-remove-sku="${sku.id}">Remove</button></td>
+      </tr>`;
+    }
+    function distPriceCellHtml(sku, distributor) {
+      const dp = latestDistributorPrice(distributor, sku.id, period);
+      return `<td>${dp ? fmt$(dp.listPrice) : '<span class="muted">Not set</span>'} <button class="btn-xs" data-edit-dist-price="${sku.id}" data-distributor="${distributor}">Edit</button></td>`;
+    }
+
+    main.innerHTML = `
+      <div class="page-header">
+        <h1>SKU Tool</h1>
+        <div class="period-control">Viewing: ${periodSelectorHTML(period)}</div>
+      </div>
+
+      <div class="page-header"><h2>SKUs</h2><button class="btn-primary btn-sm" id="add-sku-btn">+ Add SKU</button></div>
+      <p class="muted small">Add a new product/pack format here before it can be priced on any banner page, or remove one that's discontinued (removing a SKU also removes its COGS history, pricing, distributor prices and any promo calendar deals). Product COGS itself still lives on the <a href="#/cogs">COGS Master</a> page.</p>
+      <div class="table-scroll"><table class="table">
+        <thead><tr><th>SKU</th><th>Pack format</th><th>Units/carton</th><th>Channel</th><th>Category</th><th></th></tr></thead>
+        <tbody>${skusSorted.map(skuRowHtml).join("")}</tbody>
+      </table></div>
+
+      <div class="page-header"><h2>Distributor list pricing — Independent Bottleshops</h2></div>
+      <p class="muted small">Set a SKU's list price once per distributor here instead of re-entering it on every independent banner that routes through the same one. Any independent banner assigned to a distributor below automatically uses whatever's set here — that banner's own List Price field on its pricing card becomes read-only.</p>
+      <div class="table-scroll"><table class="table table-compact">
+        <thead><tr><th>SKU</th>${DISTRIBUTOR_CODES.map((d) => `<th>${d}</th>`).join("")}</tr></thead>
+        <tbody>${skusSorted.map((sku) => `<tr><td>${skuThumbHTML(sku, "sm")}${esc(sku.name)} <span class="muted small">${esc(sku.packFormat || "")}</span></td>${DISTRIBUTOR_CODES.map((d) => distPriceCellHtml(sku, d)).join("")}</tr>`).join("")}</tbody>
+      </table></div>
+
+      <div class="page-header"><h2>Banner → distributor assignment</h2></div>
+      <p class="muted small">Pick which distributor each independent banner routes through. "Direct" keeps that banner's own List Price field editable as normal, unaffected by the shared pricing above.</p>
+      <table class="table table-compact">
+        <thead><tr><th>Banner</th><th>Distributor</th></tr></thead>
+        <tbody>${independentBanners
+          .map(
+            (b) => `<tr><td>${badgeHTML(b, "sm")}${esc(b.name)}</td><td>
+          <select class="select banner-distributor-select" data-banner="${b.id}">
+            <option value="Direct" ${!b.distributor || b.distributor === "Direct" ? "selected" : ""}>Direct (own pricing)</option>
+            ${DISTRIBUTOR_CODES.map((d) => `<option value="${d}" ${b.distributor === d ? "selected" : ""}>${d}</option>`).join("")}
+          </select>
+        </td></tr>`
+          )
+          .join("")}</tbody>
+      </table>
+
+      <div id="modal-root"></div>
+    `;
+    attachPeriodSelector(main);
+    main.querySelectorAll("[data-edit-sku]").forEach((btn) => btn.addEventListener("click", () => openEditSkuModal(skuById(btn.dataset.editSku))));
+    main.querySelectorAll("[data-remove-sku]").forEach((btn) => btn.addEventListener("click", () => confirmRemoveSku(btn.dataset.removeSku)));
+    document.getElementById("add-sku-btn").addEventListener("click", () => openEditSkuModal(null));
+    main.querySelectorAll("[data-edit-dist-price]").forEach((btn) => btn.addEventListener("click", () => openEditDistPriceModal(skuById(btn.dataset.editDistPrice), btn.dataset.distributor)));
+    main.querySelectorAll(".banner-distributor-select").forEach((sel) =>
+      sel.addEventListener("change", async (e) => {
+        const banner = bannerById(e.target.dataset.banner);
+        banner.distributor = e.target.value;
+        await DB.put("banners", banner);
+        onHashChange();
+      })
+    );
+  });
+
+  function openEditSkuModal(sku) {
+    const isNew = !sku;
+    const s = sku ? Object.assign({}, sku) : { id: "", name: "", category: "Beer", style: "", packFormat: "", unitsPerCarton: 1, channel: "Off-Premise", image: "" };
+    const modalRoot = document.getElementById("modal-root");
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop"><div class="modal">
+        <h3>${isNew ? "Add" : "Edit"} SKU</h3>
+        <div class="sku-card-top" style="margin-bottom:6px;">${skuThumbHTML(s, "lg")}<span class="muted small">Product photo preview</span></div>
+        <label>Product name<input type="text" id="sku-name" value="${esc(s.name)}"></label>
+        <label>Product image URL<input type="text" id="sku-image" value="${esc(s.image || "")}" placeholder="https://yourmatesbrewing.com/cdn/shop/files/..."></label>
+        <div class="grid-2">
+          <div><label>Category<select id="sku-category" class="select">
+            <option value="Beer" ${s.category === "Beer" ? "selected" : ""}>Beer</option>
+            <option value="Cider" ${s.category === "Cider" ? "selected" : ""}>Cider</option>
+            <option value="Other" ${s.category !== "Beer" && s.category !== "Cider" ? "selected" : ""}>Other</option>
+          </select></label></div>
+          <div><label>Style<input type="text" id="sku-style" value="${esc(s.style)}" placeholder="e.g. Pale Ale"></label></div>
+        </div>
+        <label>Pack format<input type="text" id="sku-packformat" value="${esc(s.packFormat)}" placeholder="e.g. Carton 16 x 375mL"></label>
+        <div class="grid-2">
+          <div><label>Units per carton<input type="number" step="1" id="sku-units" value="${s.unitsPerCarton || 1}"></label></div>
+          <div><label>Channel<select id="sku-channel" class="select">
+            <option value="Off-Premise" ${s.channel === "Off-Premise" ? "selected" : ""}>Off-Premise</option>
+            <option value="On-Premise" ${s.channel === "On-Premise" ? "selected" : ""}>On-Premise</option>
+          </select></label></div>
+        </div>
+        ${!isNew ? '<p class="muted small">The internal SKU id stays the same when editing, so existing COGS/pricing/calendar links aren\'t affected.</p>' : ""}
+        <div class="modal-actions">
+          <button class="btn-secondary" id="sku-cancel">Cancel</button>
+          <button class="btn-primary" id="sku-save">${isNew ? "Add SKU" : "Save changes"}</button>
+        </div>
+      </div></div>`;
+    document.getElementById("sku-cancel").onclick = () => (modalRoot.innerHTML = "");
+    document.getElementById("sku-save").onclick = async () => {
+      const name = document.getElementById("sku-name").value.trim();
+      const packFormat = document.getElementById("sku-packformat").value.trim();
+      if (!name) {
+        alert("Product name is required.");
+        return;
+      }
+      const record = {
+        id: isNew ? uniqueSkuId(name, packFormat) : s.id,
+        name,
+        category: document.getElementById("sku-category").value,
+        style: document.getElementById("sku-style").value.trim(),
+        packFormat,
+        unitsPerCarton: parseInt(document.getElementById("sku-units").value, 10) || 1,
+        channel: document.getElementById("sku-channel").value,
+        image: document.getElementById("sku-image").value.trim(),
+      };
+      await DB.put("skus", record);
+      const idx = State.skus.findIndex((x) => x.id === record.id);
+      if (idx >= 0) State.skus[idx] = record;
+      else State.skus.push(record);
+      modalRoot.innerHTML = "";
+      onHashChange();
+    };
+  }
+
+  async function confirmRemoveSku(skuId) {
+    const sku = skuById(skuId);
+    if (!sku) return;
+    const cogsRows = State.cogsHistory.filter((c) => c.skuId === skuId);
+    const pricingRows = State.pricingHistory.filter((p) => p.skuId === skuId);
+    const calRows = State.calendarDeals.filter((d) => d.skuId === skuId);
+    const distRows = State.distributorPricing.filter((d) => d.skuId === skuId);
+    const parts = [];
+    if (cogsRows.length) parts.push(`${cogsRows.length} COGS history entr${cogsRows.length === 1 ? "y" : "ies"}`);
+    if (pricingRows.length) parts.push(`${pricingRows.length} pricing entr${pricingRows.length === 1 ? "y" : "ies"} across banners`);
+    if (calRows.length) parts.push(`${calRows.length} promo calendar deal${calRows.length === 1 ? "" : "s"}`);
+    if (distRows.length) parts.push(`${distRows.length} distributor price entr${distRows.length === 1 ? "y" : "ies"}`);
+    const msg = parts.length ? `Remove "${sku.name}" (${sku.packFormat})? This will also permanently delete: ${parts.join(", ")}. This can't be undone.` : `Remove "${sku.name}" (${sku.packFormat})? This can't be undone.`;
+    if (!confirm(msg)) return;
+    await DB.remove("skus", skuId);
+    await DB.removeMany(
+      "cogsHistory",
+      cogsRows.map((r) => r.id)
+    );
+    await DB.removeMany(
+      "pricingHistory",
+      pricingRows.map((r) => r.id)
+    );
+    await DB.removeMany(
+      "calendarDeals",
+      calRows.map((r) => r.id)
+    );
+    await DB.removeMany(
+      "distributorPricing",
+      distRows.map((r) => r.id)
+    );
+    State.skus = State.skus.filter((x) => x.id !== skuId);
+    State.cogsHistory = State.cogsHistory.filter((c) => c.skuId !== skuId);
+    State.pricingHistory = State.pricingHistory.filter((p) => p.skuId !== skuId);
+    State.calendarDeals = State.calendarDeals.filter((d) => d.skuId !== skuId);
+    State.distributorPricing = State.distributorPricing.filter((d) => d.skuId !== skuId);
+    onHashChange();
+  }
+
+  function openEditDistPriceModal(sku, distributor) {
+    const modalRoot = document.getElementById("modal-root");
+    const current = latestDistributorPrice(distributor, sku.id, null);
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop"><div class="modal">
+        <h3>${esc(distributor)} list price — ${esc(sku.name)} (${esc(sku.packFormat)})</h3>
+        <label>Period<select id="dp-period" class="select">${State.periods.map((p) => `<option value="${p.id}" ${p.id === (current ? current.period : State.currentPeriod) ? "selected" : ""}>${esc(p.label)}</option>`).join("")}</select></label>
+        <label>List price ($/carton)<input type="number" step="0.01" id="dp-value" value="${current ? current.listPrice : ""}"></label>
+        <label>Source / note<input type="text" id="dp-source" placeholder="e.g. Distributor rate card update" value="${current ? esc(current.source || "") : ""}"></label>
+        <p class="muted small">This applies to every independent banner currently assigned to ${esc(distributor)}.</p>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="dp-cancel">Cancel</button>
+          <button class="btn-primary" id="dp-save">Save</button>
+        </div>
+      </div></div>`;
+    document.getElementById("dp-cancel").onclick = () => (modalRoot.innerHTML = "");
+    document.getElementById("dp-save").onclick = async () => {
+      const period = document.getElementById("dp-period").value;
+      const listPrice = parseFloat(document.getElementById("dp-value").value);
+      const source = document.getElementById("dp-source").value || "Manual update";
+      if (Number.isNaN(listPrice)) {
+        alert("Enter a list price.");
+        return;
+      }
+      const existing = State.distributorPricing.find((p) => p.distributor === distributor && p.skuId === sku.id && p.period === period);
+      const record = existing ? Object.assign({}, existing, { listPrice, source }) : { distributor, skuId: sku.id, period, listPrice, source };
+      const id = await DB.put("distributorPricing", record);
+      record.id = record.id || id;
+      const idx = State.distributorPricing.findIndex((p) => p.distributor === distributor && p.skuId === sku.id && p.period === period);
+      if (idx >= 0) State.distributorPricing[idx] = record;
+      else State.distributorPricing.push(record);
+      modalRoot.innerHTML = "";
+      onHashChange();
+    };
+  }
+
   // ------------------------------------------------------------ Banner page
   route("banner", async (rest, main) => {
     const groupId = rest[0];
@@ -362,14 +636,14 @@ const App = (function () {
     const period = State.viewPeriod;
     const terms = latestBannerTerms(banner.id, period);
 
-    const bannerTabs = groupBanners.map((b) => `<a class="tab ${b.id === banner.id ? "active" : ""}" href="#/banner/${groupId}/${b.id}">${esc(b.name)}</a>`).join("");
+    const bannerTabs = groupBanners.map((b) => `<a class="tab ${b.id === banner.id ? "active" : ""}" href="#/banner/${groupId}/${b.id}">${badgeHTML(b, "sm")}${esc(b.name)}</a>`).join("");
 
     const skuRows = State.skus.map((sku) => ({ sku, pricing: latestPricing(sku.id, banner.id, period) })).filter((r) => r.pricing);
     const skusWithoutPricing = State.skus.filter((s) => !skuRows.find((r) => r.sku.id === s.id));
 
     main.innerHTML = `
       <div class="page-header">
-        <h1>${esc(group.shortName)}</h1>
+        <h1>${badgeHTML(group, "lg")}${esc(group.shortName)}</h1>
         <div class="period-control">Viewing: ${periodSelectorHTML(period)}</div>
       </div>
       <div class="tabs">${bannerTabs}</div>
@@ -419,16 +693,24 @@ const App = (function () {
   function skuCardHTML(sku, banner, pricing, period) {
     const terms = latestBannerTerms(banner.id, period);
     const distPct = terms ? terms.distributorFeePct : 0;
+    const shared = usesSharedDistributorPricing(banner);
+    const effPrice = effectiveListPrice(sku, banner, period, pricing);
+    const dp = shared ? latestDistributorPrice(banner.distributor, sku.id, period) : null;
     return `
       <div class="card sku-card" data-sku="${sku.id}">
         <div class="card-header-row">
-          <h3>${esc(sku.name)} <span class="muted small">${esc(sku.packFormat)}</span></h3>
+          <h3>${skuThumbHTML(sku)}${esc(sku.name)} <span class="muted small">${esc(sku.packFormat)}</span></h3>
           <button class="btn-sm btn-save-card" data-sku="${sku.id}">Save card</button>
         </div>
         <div class="sku-card-top">
-          <label>List price ($/carton)<input type="number" step="0.01" class="list-price-input" value="${pricing.listPrice}"></label>
+          <label>List price ($/carton)<input type="number" step="0.01" class="list-price-input" value="${effPrice}" ${shared ? "disabled" : ""}></label>
           <div class="impact-readout">Distributor fee (${fmtPct(distPct)}) deducted from YM Net on this SKU: <strong class="dist-fee-dollar"></strong></div>
         </div>
+        ${
+          shared
+            ? `<p class="muted small">List price is set once for every <strong>${esc(banner.distributor)}</strong> banner on the <a href="#/sku-tool">SKU Tool</a> page${dp ? "" : " — no price has been set for this SKU yet, defaulting to $0"}.</p>`
+            : ""
+        }
         <div class="table-scroll">
         <table class="table table-compact deal-table">
           <thead><tr><th>Deal</th><th>Shelf RRP</th><th>Discount $/carton</th><th>Scan deal $/unit</th><th>YM Net $</th><th>YM COGs</th><th>Profit $</th><th>YM GP%</th><th>Banner Margin</th><th>Target</th><th>Status</th><th></th></tr></thead>
@@ -802,10 +1084,10 @@ const App = (function () {
         <tbody>${rows
           .map(
             ({ banner, pricing, everydayDeal, m }) => `<tr>
-          <td><a href="#/banner/${banner.groupId}/${banner.id}">${esc(banner.name)}</a></td>
+          <td><a href="#/banner/${banner.groupId}/${banner.id}">${badgeHTML(banner, "sm")}${esc(banner.name)}</a></td>
           <td>${esc(State.bannerGroups.find((g) => g.id === banner.groupId).shortName)}</td>
           <td>${esc(everydayDeal.label)}</td>
-          <td>${fmt$(pricing.listPrice)}</td>
+          <td>${fmt$(m.listPrice)}</td>
           <td>${fmt$(everydayDeal.shelfRRP)}</td>
           <td>${fmt$(m.ymNetDeal)}</td>
           <td>${fmt$(m.cost.total)}</td>
@@ -835,11 +1117,11 @@ const App = (function () {
       const e = cSeries.find((c) => c.period === pid);
       return { x: periodLabel(pid).split(" (")[0], y: e ? e.productCogs : null };
     });
-    const cogsChart = Charts.lineChart([{ name: "Product COGS ($)", color: "#c0533e", points: cogsPoints }], { yIsPct: false });
+    const cogsChart = Charts.lineChart([{ name: "Product COGS ($)", color: "#c9622a", points: cogsPoints }], { yIsPct: false });
 
     const bannersWithData = State.banners.filter((b) => pricingSeries(selectedSku, b.id).length > 0);
     const gpSeries = bannersWithData.map((b, idx) => {
-      const colors = ["#2f6f4f", "#2b6cb0", "#b7791f", "#805ad5", "#c0533e", "#0e7490", "#9d174d"];
+      const colors = ["#0f7d74", "#1d5c9e", "#f6b333", "#7a5cc0", "#e2483d", "#0a9396", "#b23a6c"];
       const pSeries = pricingSeries(selectedSku, b.id);
       const points = periods.map((pid) => {
         const pr = pSeries.find((p) => p.period === pid);
@@ -856,7 +1138,7 @@ const App = (function () {
       <div class="page-header"><h1>Historical trends</h1></div>
       <label>SKU <select id="trends-sku">${skuOptions}</select></label>
       <div class="grid-2">
-        <div class="card"><h3>Product COGS over time — ${esc(sku.name)}</h3>${cogsChart}</div>
+        <div class="card"><h3>${skuThumbHTML(sku)}Product COGS over time — ${esc(sku.name)}</h3>${cogsChart}</div>
         <div class="card"><h3>YM GP% over time (everyday carton) by banner</h3>${gpChart}</div>
       </div>
     `;
@@ -881,10 +1163,15 @@ const App = (function () {
           <thead><tr><th>SKU</th><th>Current COGS</th><th>$ increase</th><th>New COGS</th><th>% increase</th></tr></thead>
           <tbody id="cpi-cogs-rows"></tbody>
         </table>
-        <h4>Wholesale / list price ($ increase per SKU, applied across all banners currently selling it)</h4>
+        <h4>Wholesale / list price ($ increase per SKU/banner)</h4>
         <table class="table table-compact">
           <thead><tr><th>SKU</th><th>Banner</th><th>Current list price</th><th>$ increase</th><th>New list price</th><th>% increase</th></tr></thead>
           <tbody id="cpi-price-rows"></tbody>
+        </table>
+        <h4>Distributor list price — Independent Bottleshops <span class="muted small">(one $ increase updates every banner routed through that distributor)</span></h4>
+        <table class="table table-compact">
+          <thead><tr><th>SKU</th><th>Distributor</th><th>Current list price</th><th>$ increase</th><th>New list price</th><th>% increase</th></tr></thead>
+          <tbody id="cpi-dist-price-rows"></tbody>
         </table>
         <div class="modal-actions">
           <button class="btn-primary" id="cpi-apply-btn">Apply update</button>
@@ -897,7 +1184,7 @@ const App = (function () {
       const c = latestCogs(sku.id, State.currentPeriod);
       if (!c) return;
       const row = el(`<tr data-sku="${sku.id}">
-        <td>${esc(sku.name)} <span class="muted small">${esc(sku.packFormat)}</span></td>
+        <td>${skuThumbHTML(sku, "sm")}${esc(sku.name)} <span class="muted small">${esc(sku.packFormat)}</span></td>
         <td class="cur-cogs">${fmt$(c.productCogs)}</td>
         <td><input type="number" step="0.01" class="cogs-delta" value="0"></td>
         <td class="new-cogs">${fmt$(c.productCogs)}</td>
@@ -915,6 +1202,8 @@ const App = (function () {
     const priceRowsBody = document.getElementById("cpi-price-rows");
     const latestByPair = {};
     State.pricingHistory.forEach((p) => {
+      const banner = bannerById(p.bannerId);
+      if (usesSharedDistributorPricing(banner)) return; // these are updated once per distributor below, not per banner
       const key = p.skuId + "|" + p.bannerId;
       if (!latestByPair[key] || periodIndex(p.period) > periodIndex(latestByPair[key].period)) latestByPair[key] = p;
     });
@@ -922,8 +1211,8 @@ const App = (function () {
       const sku = skuById(p.skuId);
       const banner = bannerById(p.bannerId);
       const row = el(`<tr data-sku="${p.skuId}" data-banner="${p.bannerId}">
-        <td>${esc(sku.name)}</td>
-        <td>${esc(banner.name)}</td>
+        <td>${skuThumbHTML(sku, "sm")}${esc(sku.name)}</td>
+        <td>${badgeHTML(banner, "sm")}${esc(banner.name)}</td>
         <td class="cur-price">${fmt$(p.listPrice)}</td>
         <td><input type="number" step="0.01" class="price-delta" value="0"></td>
         <td class="new-price">${fmt$(p.listPrice)}</td>
@@ -935,6 +1224,35 @@ const App = (function () {
         const newVal = p.listPrice + delta;
         row.querySelector(".new-price").textContent = fmt$(newVal);
         row.querySelector(".pct-price").textContent = fmtPct(Calc.pctIncrease(p.listPrice, delta));
+      });
+    });
+
+    // One row per SKU/distributor that's actually priced and in use by at least one
+    // independent banner — bumping this once updates every banner on that distributor.
+    const distPriceRowsBody = document.getElementById("cpi-dist-price-rows");
+    const distributorsInUse = new Set(State.banners.filter((b) => usesSharedDistributorPricing(b)).map((b) => b.distributor));
+    const latestByDistSku = {};
+    State.distributorPricing.forEach((dp) => {
+      if (!distributorsInUse.has(dp.distributor)) return;
+      const key = dp.distributor + "|" + dp.skuId;
+      if (!latestByDistSku[key] || periodIndex(dp.period) > periodIndex(latestByDistSku[key].period)) latestByDistSku[key] = dp;
+    });
+    Object.values(latestByDistSku).forEach((dp) => {
+      const sku = skuById(dp.skuId);
+      const row = el(`<tr data-sku="${dp.skuId}" data-distributor="${dp.distributor}">
+        <td>${skuThumbHTML(sku, "sm")}${esc(sku.name)}</td>
+        <td>${esc(dp.distributor)}</td>
+        <td class="cur-price">${fmt$(dp.listPrice)}</td>
+        <td><input type="number" step="0.01" class="dist-price-delta" value="0"></td>
+        <td class="new-price">${fmt$(dp.listPrice)}</td>
+        <td class="pct-price">0.0%</td>
+      </tr>`);
+      distPriceRowsBody.appendChild(row);
+      row.querySelector(".dist-price-delta").addEventListener("input", (e) => {
+        const delta = parseFloat(e.target.value || 0);
+        const newVal = dp.listPrice + delta;
+        row.querySelector(".new-price").textContent = fmt$(newVal);
+        row.querySelector(".pct-price").textContent = fmtPct(Calc.pctIncrease(dp.listPrice, delta));
       });
     });
 
@@ -952,6 +1270,12 @@ const App = (function () {
         const delta = Calc.round2(p.listPrice * pct);
         row.querySelector(".price-delta").value = delta;
         row.querySelector(".price-delta").dispatchEvent(new Event("input"));
+      });
+      distPriceRowsBody.querySelectorAll("tr").forEach((row) => {
+        const dp = latestByDistSku[row.dataset.distributor + "|" + row.dataset.sku];
+        const delta = Calc.round2(dp.listPrice * pct);
+        row.querySelector(".dist-price-delta").value = delta;
+        row.querySelector(".dist-price-delta").dispatchEvent(new Event("input"));
       });
     });
 
@@ -1002,6 +1326,24 @@ const App = (function () {
         record.id = id;
         State.pricingHistory.push(record);
       }
+      for (const row of distPriceRowsBody.querySelectorAll("tr")) {
+        const skuId = row.dataset.sku;
+        const distributor = row.dataset.distributor;
+        const delta = parseFloat(row.querySelector(".dist-price-delta").value || 0);
+        const dp = latestByDistSku[distributor + "|" + skuId];
+        const newVal = Calc.round2(dp.listPrice + delta);
+        const pct = Calc.pctIncrease(dp.listPrice, delta);
+        const record = {
+          distributor,
+          skuId,
+          period: newId,
+          listPrice: newVal,
+          source: `CPI update +${fmt$(delta)} (${fmtPct(pct)})`,
+        };
+        const id = await DB.put("distributorPricing", record);
+        record.id = id;
+        State.distributorPricing.push(record);
+      }
       State.viewPeriod = newId;
       alert(`CPI update applied. New period "${newLabel}" is now current.`);
       navigate("#/dashboard");
@@ -1018,8 +1360,10 @@ const App = (function () {
   // calendar bar/row that references it. "Manual" entries (mostly the
   // imported historical/placeholder deals that don't cleanly map to a
   // configured deal type) keep their own promoName/target/actual instead.
-  const CAL_PALETTE = ["#b5652d", "#2f6f4f", "#2563eb", "#7c3aed", "#d97706", "#0891b2", "#db2777", "#65a30d", "#8a4a1f", "#4f46e5"];
+  const CAL_PALETTE = ["#0f7d74", "#f6b333", "#e2483d", "#2f8f6a", "#1d5c9e", "#c9622a", "#7a5cc0", "#0a9396", "#b23a6c", "#6b8f1f"];
   function calBannerColor(bannerId) {
+    const banner = bannerById(bannerId);
+    if (banner && banner.badgeColor) return banner.badgeColor;
     const idx = State.banners.findIndex((b) => b.id === bannerId);
     return CAL_PALETTE[(idx < 0 ? 0 : idx) % CAL_PALETTE.length];
   }
@@ -1028,6 +1372,8 @@ const App = (function () {
     return CAL_PALETTE[(idx < 0 ? 0 : idx + 4) % CAL_PALETTE.length];
   }
   function calInitials(name) {
+    const banner = State.banners.find((b) => b.name === name);
+    if (banner && banner.badgeInitials) return banner.badgeInitials;
     name = (name || "?").trim();
     const parts = name.split(/\s+/);
     return (((parts[0] || "")[0] || "?") + ((parts[1] || "")[0] || "")).toUpperCase();
@@ -1116,7 +1462,7 @@ const App = (function () {
     return disp.actualMarginPct >= disp.targetMarginPct - 1e-9 ? "met" : "below";
   }
   function calMarginColor(status) {
-    return status === "met" ? "var(--pos)" : status === "below" ? "var(--neg)" : "#d97706";
+    return status === "met" ? "var(--pos)" : status === "below" ? "var(--neg)" : "var(--accent-warm)";
   }
   function calStatusBadge(s) {
     return { planned: "PLN", confirmed: "CFM", live: "LIVE", complete: "DONE" }[s] || s;
@@ -1173,7 +1519,7 @@ const App = (function () {
         <div class="cal-legend">
           <span><span class="cal-dot" style="background:var(--pos)"></span>Meeting/above target</span>
           <span><span class="cal-dot" style="background:var(--neg)"></span>Below target</span>
-          <span><span class="cal-dot" style="background:#d97706"></span>Pending / no price set</span>
+          <span><span class="cal-dot" style="background:var(--accent-warm)"></span>Pending / no price set</span>
         </div>
       </div>
       <div id="cal-timeline-view">
@@ -1567,8 +1913,8 @@ const App = (function () {
             sku = skuById(d.skuId);
           const mStatus = calMarginStatus(disp);
           return `<tr>
-          <td>${esc(banner ? banner.name : "?")}</td>
-          <td><span class="cal-dot" style="background:${calSkuColor(d.skuId)};display:inline-block;margin-right:5px;"></span>${esc(sku ? sku.name : "?")}</td>
+          <td>${banner ? badgeHTML(banner, "sm") : ""}${esc(banner ? banner.name : "?")}</td>
+          <td>${sku ? skuThumbHTML(sku, "sm") : ""}${esc(sku ? sku.name : "?")}</td>
           <td>${esc(d.cycleInstance || "")}</td>
           <td>${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</td>
           <td>${d.startDate}</td>
@@ -1700,7 +2046,7 @@ const App = (function () {
           }
           const disp = calDealDisplay({ linked: true, bannerId: b.id, skuId: s.id, dealTypeId: dtId });
           if (disp.pending) {
-            preview.innerHTML = `<span style="color:#d97706;">No price is set for "${esc(disp.promoName)}" on ${esc(s.name)} at ${esc(b.name)} yet — set it on the banner page, or link it anyway and come back once it's priced.</span>`;
+            preview.innerHTML = `<span style="color:var(--accent-warm-dark);">No price is set for "${esc(disp.promoName)}" on ${esc(s.name)} at ${esc(b.name)} yet — set it on the banner page, or link it anyway and come back once it's priced.</span>`;
           } else {
             preview.innerHTML = `= <b>${esc(disp.promoName)}</b> · Target ${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "not set"} · Actual ${disp.actualMarginPct != null ? fmtPct(disp.actualMarginPct) : "—"}`;
           }
@@ -1927,7 +2273,7 @@ const App = (function () {
     document.getElementById("reset-btn").onclick = async () => {
       if (!confirm("This will erase all current data and reload the sample dataset. Continue?")) return;
       await DB.setMeta("seeded", false);
-      for (const s of ["skus", "cogsHistory", "bannerGroups", "banners", "bannerTermsHistory", "pricingHistory", "calendarDeals"]) {
+      for (const s of ["skus", "cogsHistory", "bannerGroups", "banners", "bannerTermsHistory", "pricingHistory", "calendarDeals", "distributorPricing"]) {
         await DB.clearStore(s);
       }
       await DB.seedIfEmpty();
@@ -1939,7 +2285,7 @@ const App = (function () {
   async function boot() {
     await DB.open();
     await DB.seedIfEmpty();
-    const [skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, periods, currentPeriod] = await Promise.all([
+    const [skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, distributorPricing, periods, currentPeriod] = await Promise.all([
       DB.getAll("skus"),
       DB.getAll("cogsHistory"),
       DB.getAll("bannerGroups"),
@@ -1947,10 +2293,11 @@ const App = (function () {
       DB.getAll("bannerTermsHistory"),
       DB.getAll("pricingHistory"),
       DB.getAll("calendarDeals"),
+      DB.getAll("distributorPricing"),
       DB.getMeta("periods"),
       DB.getMeta("currentPeriod"),
     ]);
-    Object.assign(State, { skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, periods, currentPeriod });
+    Object.assign(State, { skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, distributorPricing, periods, currentPeriod });
     State.viewPeriod = currentPeriod;
 
     const nav = document.getElementById("nav-links");
@@ -1958,6 +2305,7 @@ const App = (function () {
     nav.innerHTML = `
       <a class="nav-link" data-route="dashboard" href="#/dashboard">Dashboard</a>
       <a class="nav-link" data-route="cogs" href="#/cogs">COGS Master</a>
+      <a class="nav-link" data-route="sku-tool" href="#/sku-tool">SKU Tool</a>
       ${groupLinks}
       <a class="nav-link" data-route="compare" href="#/compare">Compare SKUs</a>
       <a class="nav-link" data-route="trends" href="#/trends">Trends</a>

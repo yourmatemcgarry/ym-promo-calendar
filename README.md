@@ -139,6 +139,40 @@ by CPI (only COGS/list price) since retail price changes are usually a
 separate commercial decision — review and adjust them per banner card
 afterwards.
 
+## SKU Tool
+
+**SKU Tool** is where SKUs and independent-banner distributor pricing are
+managed, separate from day-to-day pricing work on the banner pages.
+
+**Add or remove SKUs.** "+ Add SKU" creates a new product/pack format
+(name, category, style, pack format, units per carton, channel) that then
+becomes available to price on any banner page and to give COGS on the COGS
+Master page. **Remove** deletes a SKU entirely — it also deletes that
+SKU's COGS history, pricing history, distributor prices and any Promo
+Calendar deals, and tells you exactly how many of each before you confirm,
+since this can't be undone.
+
+**Distributor list pricing (Independent Bottleshops).** Independent
+banners can be assigned to one of five distributors — **ALM, ILG,
+Paramount, EDG, CLG** — in the "Banner → distributor assignment" table (or
+**Direct**, which keeps that banner pricing itself as before). Once a
+banner is assigned to a real distributor, its List Price field on the
+banner page becomes read-only and always shows that distributor's current
+price — so instead of updating the same list price on every independent
+banner that happens to route through the same distributor, you set it
+**once** per SKU/distributor in the table above, and every assigned banner
+picks it up immediately (their own deals — Shelf RRP, scan deal, discount,
+target margin — still work exactly as before, only the list price is
+shared). This is also versioned by period, so distributor price history is
+preserved the same way COGS and everything else is. The 6-monthly **CPI
+Update** page picks this up too — a separate "Distributor list price"
+table lets you apply one $ increase per SKU/distributor instead of
+repeating it across every banner on that distributor.
+
+None of your independent banners have a distributor assigned yet (they
+default to Direct/no shared pricing) — assign them here whenever you're
+ready to switch a banner over to shared distributor pricing.
+
 ## Promo Calendar
 
 **Promo Calendar** is the timeline view merged in from your separate promo
@@ -214,6 +248,31 @@ Everything is editable in the UI — there's no code to touch. Use the
 "+ Add SKU to this banner" dropdown on a banner page to create a new SKU
 card, "+ Add deal" on any SKU card to add one of that banner's configured
 deal types, "Manage deal types" to add/edit/remove the deal types a banner
-offers, "+ Add period" on the COGS Master page for a new COGS entry, and
+offers, "Edit" on the COGS Master page for a SKU's COGS entry, and
 "Edit / new period" on a banner's Terms panel to update rebates, fees or
-target margins.
+target margins. New SKUs themselves (name, pack format, etc.) are added or
+removed on the **SKU Tool** page.
+
+## Look and feel
+
+The app's colours (teal, gold, coral) are pulled from Your Mates Brewing's
+own branding at yourmatesbrewing.com, and the header logo is hotlinked
+directly from the site.
+
+**Product photos.** Every SKU that currently has a matching product on
+yourmatesbrewing.com shows that product's real photo (23 of the 25 SKUs —
+**Jeff Juicy** and **Cider** aren't currently sold on the site, so those two
+show a plain initials circle instead). All images are hotlinked directly
+from yourmatesbrewing.com's own image hosting rather than downloaded/copied
+into this app, so they'll always match whatever's live on the site, but it
+also means they need an internet connection to load (they degrade
+gracefully to an initials circle if a link ever breaks). You can change or
+add any SKU's photo yourself: **Edit** it on the SKU Tool page and paste in
+a new image URL.
+
+**Banner and banner-group "logos"** are deliberately colour-badge initials
+(e.g. "DM" for Dan Murphy's) rather than the retailers' actual logos —
+BWS, Dan Murphy's, Liquorland, etc. are third-party trademarks, so this app
+doesn't scrape or embed them. If you'd like real retailer logos instead,
+supply the image files (or approved URLs) and they can be wired in the same
+way SKU photos are.

@@ -11,8 +11,8 @@
 const DB = (function () {
   "use strict";
   const DB_NAME = "ym-beer-pricing";
-  const DB_VERSION = 2;
-  const STORES = ["skus", "cogsHistory", "bannerGroups", "banners", "bannerTermsHistory", "pricingHistory", "calendarDeals", "meta"];
+  const DB_VERSION = 3;
+  const STORES = ["skus", "cogsHistory", "bannerGroups", "banners", "bannerTermsHistory", "pricingHistory", "calendarDeals", "distributorPricing", "meta"];
 
   let dbPromise = null;
 
@@ -29,6 +29,7 @@ const DB = (function () {
         if (!db.objectStoreNames.contains("bannerTermsHistory")) db.createObjectStore("bannerTermsHistory", { keyPath: "id", autoIncrement: true });
         if (!db.objectStoreNames.contains("pricingHistory")) db.createObjectStore("pricingHistory", { keyPath: "id", autoIncrement: true });
         if (!db.objectStoreNames.contains("calendarDeals")) db.createObjectStore("calendarDeals", { keyPath: "id" });
+        if (!db.objectStoreNames.contains("distributorPricing")) db.createObjectStore("distributorPricing", { keyPath: "id", autoIncrement: true });
         if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath: "key" });
       };
       req.onsuccess = (e) => resolve(e.target.result);
@@ -71,6 +72,35 @@ const DB = (function () {
           if (remaining === 0) return resolve();
           values.forEach((v) => {
             const req = store.put(v);
+            req.onsuccess = () => {
+              remaining -= 1;
+              if (remaining === 0) resolve();
+            };
+            req.onerror = () => reject(req.error);
+          });
+        })
+    );
+  }
+
+  function remove(storeName, id) {
+    return tx(storeName, "readwrite").then(
+      (store) =>
+        new Promise((resolve, reject) => {
+          const req = store.delete(id);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        })
+    );
+  }
+
+  function removeMany(storeName, ids) {
+    return tx(storeName, "readwrite").then(
+      (store) =>
+        new Promise((resolve, reject) => {
+          let remaining = ids.length;
+          if (remaining === 0) return resolve();
+          ids.forEach((id) => {
+            const req = store.delete(id);
             req.onsuccess = () => {
               remaining -= 1;
               if (remaining === 0) resolve();
@@ -133,6 +163,12 @@ const DB = (function () {
         data.calendarDeals.map((r) => Object.assign({}, r))
       );
     }
+    if (data.distributorPricing) {
+      await putMany(
+        "distributorPricing",
+        data.distributorPricing.map((r) => Object.assign({}, r))
+      );
+    }
     await setMeta("periods", data.periods);
     await setMeta("currentPeriod", data.currentPeriod);
     await setMeta("seeded", true);
@@ -140,7 +176,7 @@ const DB = (function () {
   }
 
   async function exportAll() {
-    const [skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, periods, currentPeriod] = await Promise.all([
+    const [skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, distributorPricing, periods, currentPeriod] = await Promise.all([
       getAll("skus"),
       getAll("cogsHistory"),
       getAll("bannerGroups"),
@@ -148,6 +184,7 @@ const DB = (function () {
       getAll("bannerTermsHistory"),
       getAll("pricingHistory"),
       getAll("calendarDeals"),
+      getAll("distributorPricing"),
       getMeta("periods"),
       getMeta("currentPeriod"),
     ]);
@@ -162,6 +199,7 @@ const DB = (function () {
       bannerTermsHistory,
       pricingHistory,
       calendarDeals,
+      distributorPricing,
     };
   }
 
@@ -177,6 +215,7 @@ const DB = (function () {
     if (data.bannerTermsHistory) await putMany("bannerTermsHistory", stripIdsIfMerge(data.bannerTermsHistory, mode));
     if (data.pricingHistory) await putMany("pricingHistory", stripIdsIfMerge(data.pricingHistory, mode));
     if (data.calendarDeals) await putMany("calendarDeals", data.calendarDeals);
+    if (data.distributorPricing) await putMany("distributorPricing", stripIdsIfMerge(data.distributorPricing, mode));
     if (data.periods) await setMeta("periods", data.periods);
     if (data.currentPeriod) await setMeta("currentPeriod", data.currentPeriod);
     await setMeta("seeded", true);
@@ -197,6 +236,8 @@ const DB = (function () {
     getAll,
     put,
     putMany,
+    remove,
+    removeMany,
     clearStore,
     getMeta,
     setMeta,
