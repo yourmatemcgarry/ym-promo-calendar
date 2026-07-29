@@ -78,7 +78,8 @@ sheet, see the worked example below):
   Product COGS, so a heavier/more expensive SKU automatically carries a
   bigger $ freight cost from the same %.
 - **Target margins** — by pack type (multipack/carton/2-for-$) and deal
-  type (everyday/promo).
+  type (everyday/promo). Set on **Manage deal types**, not the Terms panel
+  (see below) — since deal types are what determine which target applies.
 
 **Worked example** (Star Liquor, Larry, 16-pack carton, routed via ALM):
 List Price $56.50, minus Distributor Fee 5% ($2.83), minus Banner Term
@@ -115,18 +116,27 @@ everything else, and only affects that banner's cost price / margin. It has
 no effect on YM Net $, Profit $ or YM GP%, since Your Mates isn't a party to
 it.
 
-**Deal / promo types are configured per banner.** Click **Manage deal
-types** on any banner page to define exactly which deals that banner runs
-(e.g. Endeavour might be Everyday + Promo 1 + Promo 2, each as Multipack or
-Carton; an independent might add 2-for-$ or a Gift Promo). Each SKU card
-then offers only that banner's deal types in its "+ Add deal" dropdown, and
-the pack type/deal type on each is what drives which target margin applies.
+**Deal / promo types and target margins are both configured per banner from
+the same place.** Click **Manage deal types** on any banner page to define
+exactly which deals that banner runs (e.g. Endeavour might be Everyday +
+Promo 1 + Promo 2, each as Multipack or Carton; an independent might add
+2-for-$ or a Gift Promo) — and, right below that, set the target margin %
+for each pack type / deal type combination those deal types use. Each SKU
+card then offers only that banner's deal types in its "+ Add deal"
+dropdown, and the pack type/deal type on each is what drives which target
+margin applies (so several deal types sharing "carton / promo" all share
+that one target). The **Terms** panel is now only distributor fee, freight,
+pick fee and the fee/rebate waterfall — no target margins there anymore.
 
-**Each banner page lists every SKU as its own vertical card** — list price
-at the top, then a table of that SKU's deals underneath. **Shelf RRP and
-Scan Deal $ are both live inputs**: change either one and every computed
-column (YM Net $, YM COGS, Profit $, YM GP%, Banner Margin %, meets-target)
-recalculates instantly, with nothing saved until you click **Save card**.
+**Each banner page lists every SKU as its own card**, list price at the
+top and its deals underneath, one per row. Each deal row's top line is the
+"is this okay?" glance-info — deal name, status, Shelf RRP, Banner Margin,
+Target — sized to always fit on screen without side-scrolling; the $
+breakdown (YM Net, YM COGS, Profit, YM GP%) sits on a second, quieter line
+underneath, along with the Discount/Scan Deal inputs. **Shelf RRP and Scan
+Deal $ are both live inputs**: change either one (or the Discount) and
+every computed figure recalculates instantly, with nothing saved until you
+click **Save card**.
 
 **Discount $/carton** and **Scan deal $/unit** are both deal-specific
 levers, on top of the everyday terms above, and both work the same way in

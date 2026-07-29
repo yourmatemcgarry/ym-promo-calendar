@@ -718,13 +718,8 @@ const App = (function () {
             ? `<p class="muted small">List price is set once for every <strong>${esc(banner.distributor)}</strong> banner on the <a href="#/sku-tool">SKU Tool</a> page${dp ? "" : " — no price has been set for this SKU yet, defaulting to $0"}.</p>`
             : ""
         }
-        <div class="table-scroll">
-        <table class="table table-compact deal-table">
-          <thead><tr><th>Deal</th><th>Shelf RRP (inc GST)</th><th>Discount $/carton</th><th>Scan deal $/unit</th><th>YM Net $</th><th>YM COGs</th><th>Profit $</th><th>YM GP%</th><th>Banner Margin</th><th>Target</th><th>Status</th><th></th></tr></thead>
-          <tbody>
-            ${pricing.deals.map((deal, i) => dealRowHTML(sku, banner, pricing, deal, i, period)).join("")}
-          </tbody>
-        </table>
+        <div class="deal-list">
+          ${pricing.deals.map((deal, i) => dealRowHTML(sku, banner, pricing, deal, i, period)).join("") || '<p class="muted small">No deals yet — use "+ Add deal…" below.</p>'}
         </div>
         <p class="muted small">YM Net = List Price − Distributor Fee (% of list) − Banner Terms (% of list) − Discount $/carton − Scan Deal $/unit. Distributor fee and banner terms are both calculated on the full list price and don't change per deal; the discount and scan deal are deal-specific and come off last. Both the discount and the scan deal also lower the banner's effective cost price — the bigger either one is, the better the Banner Margin gets — while a pick fee (set on the banner's Terms panel) works the other way, adding to their cost. Every $ figure here is ex GST except Shelf RRP, which is GST-inclusive (what's on the shelf tag) — Banner Margin converts it to ex GST first so GST itself isn't counted as margin.</p>
         <div class="add-deal-row">
@@ -736,25 +731,35 @@ const App = (function () {
       </div>`;
   }
 
+  // Deal rows are flex-wrapping cards, not table columns — the status,
+  // shelf price and target (the "is this deal okay?" glance-info) always
+  // sit together on one line that wraps naturally on narrower screens,
+  // instead of forcing a wide table that needs horizontal scrolling to see
+  // whether a deal is meeting its target. The full $ breakdown (YM Net,
+  // COGS, Profit, GP%) sits on a second, more muted line underneath.
   function dealRowHTML(sku, banner, pricing, deal, i, period) {
     const m = computeDeal(sku, banner, pricing, deal, period);
-    return `<tr class="deal-row" data-i="${i}">
-      <td>${esc(deal.label)}</td>
-      <td><input type="number" step="0.01" class="rrp-input" value="${deal.shelfRRP}"></td>
-      <td><input type="number" step="0.01" class="discount-input" value="${deal.discountPerCarton || 0}"></td>
-      <td><input type="number" step="0.01" class="scan-input" value="${deal.scanDeal || 0}"></td>
-      <td class="out-net">${fmt$(m.ymNetDeal)}</td>
-      <td class="out-cogs">${fmt$(m.cost.total)}</td>
-      <td class="out-profit ${m.profit >= 0 ? "pos" : "neg"}">${fmt$(m.profit)}</td>
-      <td class="out-gp">${fmtPct(m.gpPct)}</td>
-      <td class="out-margin">${fmtPct(m.bannerMarginPct)}</td>
-      <td class="out-target">${fmtPct(m.targetMarginPct)}</td>
-      <td class="out-status ${m.meetsTarget === true ? "pos" : m.meetsTarget === false ? "neg" : "muted"}">${m.meetsTarget === true ? "✓ Meets target" : m.meetsTarget === false ? "✗ Below target" : "No target"}</td>
-      <td>
+    const statusText = m.meetsTarget === true ? "✓ Meets target" : m.meetsTarget === false ? "✗ Below target" : "No target set";
+    const statusClass = m.meetsTarget === true ? "pos" : m.meetsTarget === false ? "neg" : "muted";
+    return `<div class="deal-row" data-i="${i}">
+      <div class="deal-row-main">
+        <span class="deal-name">${esc(deal.label)}</span>
+        <span class="deal-chip out-status ${statusClass}">${statusText}</span>
+        <label class="deal-inline">Shelf RRP (inc GST)<input type="number" step="0.01" class="rrp-input" value="${deal.shelfRRP}"></label>
+        <span class="deal-metric">Banner Margin <strong class="out-margin">${fmtPct(m.bannerMarginPct)}</strong></span>
+        <span class="deal-metric">Target <strong class="out-target">${fmtPct(m.targetMarginPct)}</strong></span>
+      </div>
+      <div class="deal-row-detail">
+        <label class="deal-inline">Discount $/ctn<input type="number" step="0.01" class="discount-input" value="${deal.discountPerCarton || 0}"></label>
+        <label class="deal-inline">Scan $/unit<input type="number" step="0.01" class="scan-input" value="${deal.scanDeal || 0}"></label>
+        <span>YM Net <strong class="out-net">${fmt$(m.ymNetDeal)}</strong></span>
+        <span>YM COGS <strong class="out-cogs">${fmt$(m.cost.total)}</strong></span>
+        <span>Profit <strong class="out-profit ${m.profit >= 0 ? "pos" : "neg"}">${fmt$(m.profit)}</strong></span>
+        <span>YM GP% <strong class="out-gp">${fmtPct(m.gpPct)}</strong></span>
         ${m.targetMarginPct != null ? `<button class="btn-xs btn-fill-scan" title="Fill in the scan deal needed to hit target">Fill scan deal</button>` : ""}
         <button class="btn-xs remove-deal-row">✕</button>
-      </td>
-    </tr>`;
+      </div>
+    </div>`;
   }
 
   function recalcCard(cardEl, sku, banner, period) {
@@ -838,8 +843,8 @@ const App = (function () {
 
   function rerenderDealRows(cardEl, sku, banner, period) {
     const tempPricing = { listPrice: parseFloat(cardEl.querySelector(".list-price-input").value || 0), deals: cardEl._deals };
-    const tbody = cardEl.querySelector(".deal-table tbody");
-    tbody.innerHTML = cardEl._deals.map((deal, i) => dealRowHTML(sku, banner, tempPricing, deal, i, period)).join("");
+    const list = cardEl.querySelector(".deal-list");
+    list.innerHTML = cardEl._deals.map((deal, i) => dealRowHTML(sku, banner, tempPricing, deal, i, period)).join("") || '<p class="muted small">No deals yet — use "+ Add deal…" below.</p>';
     recalcCard(cardEl, sku, banner, period);
   }
 
@@ -906,17 +911,7 @@ const App = (function () {
           <h4>Fee / rebate waterfall (all %)</h4>
           <div id="fee-lines">${(current.feeWaterfall || []).map((f, i) => feeLineRowHTML(f, i)).join("")}</div>
           <button class="btn-sm" id="add-fee-line">+ Add fee/rebate line</button>
-          <h4>Target margins</h4>
-          <div id="margin-lines">${["multipack", "carton", "2for$"]
-            .flatMap((pack) =>
-              ["everyday", "promo"].map((deal) => {
-                const t = (current.targetMargins || []).find((t) => t.packType === pack && t.dealType === deal);
-                return `<label class="inline-label">${pack} / ${deal} target %
-                  <input type="number" step="0.1" class="margin-input" data-pack="${pack}" data-deal="${deal}" value="${t && t.targetPct != null ? (t.targetPct * 100).toFixed(1) : ""}" placeholder="not set">
-                </label>`;
-              })
-            )
-            .join("")}</div>
+          <p class="muted small">Target margins are set on <strong>Manage deal types</strong> now, alongside the deal types they apply to.</p>
           <label>Notes<textarea id="terms-notes">${esc(current.notes || "")}</textarea></label>
           <div class="modal-actions">
             <button class="btn-secondary" id="terms-cancel">Cancel</button>
@@ -953,11 +948,6 @@ const App = (function () {
         value: parseFloat(row.querySelector(".fee-value").value || 0) / 100,
         kind: row.querySelector(".fee-kind").value,
       }));
-      const targetMargins = Array.from(document.querySelectorAll(".margin-input")).map((inp) => ({
-        packType: inp.dataset.pack,
-        dealType: inp.dataset.deal,
-        targetPct: inp.value === "" ? null : parseFloat(inp.value) / 100,
-      }));
       const record = {
         bannerId: banner.id,
         period,
@@ -968,7 +958,7 @@ const App = (function () {
         directDeliveryPct: parseFloat(document.getElementById("terms-ddc").value || 0) / 100,
         kegCollectionPct: parseFloat(document.getElementById("terms-keg").value || 0) / 100,
         pickFeePerCarton: parseFloat(document.getElementById("terms-pickfee").value || 0),
-        targetMargins,
+        targetMargins: current.targetMargins || [], // edited on the Manage deal types modal now — carried forward unchanged
         notes: document.getElementById("terms-notes").value,
       };
       const existing = State.bannerTermsHistory.find((t) => t.bannerId === banner.id && t.period === period);
@@ -1002,14 +992,30 @@ const App = (function () {
   function openDealTypesModal(banner) {
     const modalRoot = document.getElementById("modal-root");
     const types = (banner.dealTypes || []).map((d) => Object.assign({}, d));
+    const currentTerms = latestBannerTerms(banner.id, null) || { feeWaterfall: [], targetMargins: [], distributorFeePct: 0, freightPct: 0, directDeliveryPct: 0, kegCollectionPct: 0, pickFeePerCarton: 0 };
     function render() {
       modalRoot.innerHTML = `
         <div class="modal-backdrop">
           <div class="modal modal-wide">
             <h3>Deal / promo types — ${esc(banner.name)}</h3>
-            <p class="muted small">These are the deal types available when adding pricing for a SKU at this banner. Pack type + deal type determine which target margin applies.</p>
+            <p class="muted small">These are the deal types available when adding pricing for a SKU at this banner. Pack type + deal type determine which target margin applies below.</p>
             <div id="deal-type-lines">${types.map((t, i) => dealTypeRowHTML(t, i)).join("")}</div>
             <button class="btn-sm" id="add-deal-type">+ Add deal type</button>
+            <h4>Target margins</h4>
+            <p class="muted small">Shared by pack type + deal type — e.g. every deal type above that's "carton / promo" uses the same "carton / promo" target below.</p>
+            <label>Save target margins as period
+              <select id="dt-period">${State.periods.map((p) => `<option value="${p.id}" ${p.id === State.currentPeriod ? "selected" : ""}>${esc(p.label)}</option>`).join("")}</select>
+            </label>
+            <div id="margin-lines">${["multipack", "carton", "2for$"]
+              .flatMap((pack) =>
+                ["everyday", "promo"].map((deal) => {
+                  const t = (currentTerms.targetMargins || []).find((t) => t.packType === pack && t.dealType === deal);
+                  return `<label class="inline-label">${pack} / ${deal} target %
+                    <input type="number" step="0.1" class="margin-input" data-pack="${pack}" data-deal="${deal}" value="${t && t.targetPct != null ? (t.targetPct * 100).toFixed(1) : ""}" placeholder="not set">
+                  </label>`;
+                })
+              )
+              .join("")}</div>
             <div class="modal-actions">
               <button class="btn-secondary" id="dt-cancel">Cancel</button>
               <button class="btn-primary" id="dt-save">Save</button>
@@ -1038,8 +1044,29 @@ const App = (function () {
         }));
         banner.dealTypes = newTypes;
         await DB.put("banners", banner);
-        const idx = State.banners.findIndex((b) => b.id === banner.id);
-        if (idx >= 0) State.banners[idx] = banner;
+        const bannerIdx = State.banners.findIndex((b) => b.id === banner.id);
+        if (bannerIdx >= 0) State.banners[bannerIdx] = banner;
+
+        // Target margins live inside the banner's versioned Terms record —
+        // save a new version carrying forward every other term field
+        // unchanged (fees, distributor %, pick fee, etc.), only replacing
+        // targetMargins + the period being saved to.
+        const period = document.getElementById("dt-period").value;
+        const targetMargins = Array.from(document.querySelectorAll(".margin-input")).map((inp) => ({
+          packType: inp.dataset.pack,
+          dealType: inp.dataset.deal,
+          targetPct: inp.value === "" ? null : parseFloat(inp.value) / 100,
+        }));
+        const termsRecord = Object.assign({}, currentTerms, { bannerId: banner.id, period, targetMargins });
+        delete termsRecord.id;
+        const existingTerms = State.bannerTermsHistory.find((t) => t.bannerId === banner.id && t.period === period);
+        if (existingTerms) termsRecord.id = existingTerms.id;
+        const termsId = await DB.put("bannerTermsHistory", termsRecord);
+        termsRecord.id = termsRecord.id || termsId;
+        const termsIdx = State.bannerTermsHistory.findIndex((t) => t.bannerId === banner.id && t.period === period);
+        if (termsIdx >= 0) State.bannerTermsHistory[termsIdx] = termsRecord;
+        else State.bannerTermsHistory.push(termsRecord);
+
         modalRoot.innerHTML = "";
         onHashChange();
       };
