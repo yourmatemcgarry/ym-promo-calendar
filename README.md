@@ -28,11 +28,13 @@ since the browser blocks its database in that mode.
 ## What's pre-loaded
 
 The app ships pre-loaded with data extracted from your existing **"Master
-Pricing Plan by Channel"** workbook: 25 SKUs/pack formats (cartons and
-kegs), 18 banners across the three groups, banner rebate/pick-fee/target-
+Pricing Plan by Channel"** workbook: 10 off-premise carton SKUs/pack
+formats, 18 banners across the three groups, banner rebate/pick-fee/target-
 margin terms from your "Margin Expectations Source of Truth" tab, and
 pricing history across three 6-monthly periods (FY26 H1, FY26 H2, FY27 H1)
-where that data existed in the source file.
+where that data existed in the source file. (Keg SKUs from the source
+workbook were left out of this tool — add them back on the SKU Tool page
+if you ever want to price kegs here too.)
 
 **Known gaps carried over from the source workbook** (worth fixing first):
 - Several independent banners (The Bottler, Super Cellars, Fleet Street
@@ -102,27 +104,27 @@ Scan Deal $ are both live inputs**: change either one and every computed
 column (YM Net $, YM COGS, Profit $, YM GP%, Banner Margin %, meets-target)
 recalculates instantly, with nothing saved until you click **Save card**.
 
-**Discount $/carton** is a second lever, separate from scan deals: it's a
-deal-specific $ discount (matching things like an "EDD discount", "promo
-discount", or "2-for-$ discount" in a typical banner pricing sheet) that
-comes straight off YM Net Everyday to give that deal's YM Net $ — it does
-not change the basis used for the distributor fee or banner terms above
-(both of those are fixed per SKU/banner, not per deal). The banner's own
-cost price (what they're invoiced) is simply the list price divided across
-the shelf units in a carton — distributor fee and banner-terms rebates are
-a settlement between YM and the distributor and don't change what the
-banner is charged; a **scan deal** does, since it's paid back to the
-banner directly (see below).
+**Discount $/carton** and **Scan deal $/unit** are both deal-specific
+levers, on top of the everyday terms above, and both work the same way in
+one important respect: **the bigger either one is, the lower the banner's
+effective cost price, and the better their Banner Margin gets.**
 
-**Scan deals** are the main lever for hitting a banner's margin target
-without permanently repricing: a scan deal is a $-per-unit rebate Your
-Mates funds back to the banner for units sold during the promo. It lowers
-the banner's effective cost price (helping them hit their target margin at
-a lower shelf price) while also reducing what Your Mates nets on the sale —
-so you can see the trade-off directly. Every deal that has a target margin
-set shows a **Fill scan deal** button that fills in exactly the scan deal
-$ needed to hit that target at the current shelf price; adjust the shelf
-price and click it again to see how the required scan deal (and YM's GP
+- **Discount $/carton** (matching things like an "EDD discount", "promo
+  discount", or "2-for-$ discount" in a typical banner pricing sheet) comes
+  straight off YM Net Everyday to give that deal's YM Net $, and also comes
+  off the banner's cost price per shelf unit (converted from carton to
+  shelf-unit terms). It does not change the basis used for the distributor
+  fee or banner terms above — those stay fixed per SKU/banner, not per deal.
+- **Scan deal $/unit** is a $-per-unit rebate Your Mates funds back to the
+  banner for units sold during the promo — it also comes off YM Net $ and
+  off the banner's cost price per shelf unit.
+
+Both reduce what Your Mates nets on the sale while improving what the
+banner's margin looks like, so you can see the trade-off directly as you
+adjust either one. Every deal that has a target margin set shows a **Fill
+scan deal** button that fills in exactly the scan deal $ needed to hit that
+target at the current shelf price and discount; adjust the shelf price or
+discount and click it again to see how the required scan deal (and YM's GP
 hit) changes.
 
 ## Every 6 months: CPI update
@@ -211,10 +213,10 @@ import, worth knowing:
   banner (your choice) — re-point them to Small Box individually if any
   should sit there instead.
 - **Dave** (355ml 4-pack/16-pack) isn't in the pricing sheet's off-premise
-  SKU list yet — only an on-premise keg version exists. It came up in your
-  Star Liquor promo notes but has zero calendar deals against it, so
-  nothing was dropped; add an off-premise Dave SKU on the COGS Master page
-  first if you want to price and link Dave deals going forward.
+  SKU list yet. It came up in your Star Liquor promo notes but has zero
+  calendar deals against it, so nothing was dropped; add an off-premise
+  Dave SKU on the SKU Tool page first if you want to price and link Dave
+  deals going forward.
 
 Banners and SKUs themselves are still managed from their own pages
 (banner Terms/deal types, COGS Master) — the calendar just visualises

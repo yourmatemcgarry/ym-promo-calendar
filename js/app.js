@@ -719,7 +719,7 @@ const App = (function () {
           </tbody>
         </table>
         </div>
-        <p class="muted small">YM Net = List Price − Distributor Fee (% of list) − Banner Terms (% of list) − Discount $/carton − Scan Deal $/unit. Distributor fee and banner terms are both calculated on the full list price and don't change per deal; the discount and scan deal are deal-specific and come off last.</p>
+        <p class="muted small">YM Net = List Price − Distributor Fee (% of list) − Banner Terms (% of list) − Discount $/carton − Scan Deal $/unit. Distributor fee and banner terms are both calculated on the full list price and don't change per deal; the discount and scan deal are deal-specific and come off last. Both the discount and the scan deal also lower the banner's effective cost price — the bigger either one is, the better the Banner Margin gets.</p>
         <div class="add-deal-row">
           <select class="add-deal-type-select">
             <option value="">+ Add deal…</option>

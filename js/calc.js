@@ -46,14 +46,13 @@
  * 10. GP % (per deal)     = Profit $ / YM Net $ (deal)
  *
  *  Banner / retail side:
- * 11. Banner Cost Price = (List Price / packQty) − Scan Deal $ per shelf unit
- *       (what the banner pays, per shelf unit — the distributor fee and
- *       banner-terms rebates are a YM/distributor-side settlement and don't
- *       change what the banner is invoiced; a scan deal is paid back to the
- *       banner directly, so it does lower their effective cost. A straight
- *       "discount per carton" is also a YM/distributor-side settlement —
- *       if a deal's discount is instead something the banner is invoiced
- *       less for, model it as a scan deal instead.)
+ * 11. Banner Cost Price = (List Price / packQty) − (Discount per carton /
+ *       packQty) − Scan Deal $ per shelf unit
+ *       (what the banner effectively pays, per shelf unit — the
+ *       distributor fee and banner-terms rebates are a YM/distributor-side
+ *       settlement and don't change what the banner is invoiced. Both the
+ *       discount and the scan deal DO lower the banner's effective cost,
+ *       so the bigger either one is, the better the banner's margin gets.)
  * 12. Banner Margin $ = Shelf RRP − Banner Cost Price
  * 13. Banner Margin % = Banner Margin $ / Shelf RRP
  * 14. Meets Target?   = Banner Margin % >= banner's targetMargin% for that
@@ -127,8 +126,11 @@
    *                         the full list price — same base as distributor
    *                         fee. Deducted from YM Net.
    *   discountPerCarton   : $ off-invoice discount per carton, deal-specific.
-   *                         Subtracted from YM Net Everyday directly —
-   *                         does NOT change the basis used above.
+   *                         Subtracted from YM Net Everyday directly (does
+   *                         NOT change the distributor-fee/banner-terms
+   *                         basis above), AND lowers the banner's effective
+   *                         cost price — so a bigger discount both costs YM
+   *                         more and improves the banner's margin.
    *   scanDeal            : $ per shelf unit, funded by YM, paid back to the
    *                         banner per unit sold — reduces both YM's net
    *                         and the banner's effective cost price
@@ -164,11 +166,13 @@
     const profit = ymNetDeal - cost.total;
     const gpPct = ymNetDeal !== 0 ? profit / ymNetDeal : null;
 
-    // Banner cost price: what the banner is invoiced per shelf unit. The
-    // distributor fee and banner-term rebates are a YM/distributor-side
-    // settlement and don't change what the banner pays; a scan deal is
-    // paid back to the banner directly, so it does lower their cost.
-    const bannerCostPriceBeforeScan = listPrice / qty;
+    // Banner cost price: what the banner effectively pays per shelf unit.
+    // The distributor fee and banner-term rebates are a YM/distributor-side
+    // settlement and don't change what the banner is invoiced. Both a
+    // discount-per-carton and a scan deal DO lower the banner's cost,
+    // though — a bigger discount or scan deal means a better banner margin.
+    const discountPerShelfUnit = (discountPerCarton || 0) / qty;
+    const bannerCostPriceBeforeScan = listPrice / qty - discountPerShelfUnit;
     const bannerCostPrice = bannerCostPriceBeforeScan - (scanDeal || 0);
     const bannerMarginDollar = shelfRRP != null ? shelfRRP - bannerCostPrice : null;
     const bannerMarginPct = shelfRRP ? bannerMarginDollar / shelfRRP : null;
@@ -220,7 +224,8 @@
    */
   function solveRequiredScanDeal({ listPrice, distributorFeePct, feeWaterfall, discountPerCarton, shelfRRP, targetMarginPct, cogs, bannerTerms, packQty }) {
     const qty = packQty && packQty > 0 ? packQty : 1;
-    const bannerCostPriceBeforeScan = listPrice / qty;
+    const discountPerShelfUnit = (discountPerCarton || 0) / qty;
+    const bannerCostPriceBeforeScan = listPrice / qty - discountPerShelfUnit;
     const bannerCostPriceNeeded = shelfRRP * (1 - targetMarginPct);
     const requiredScanDeal = Math.max(0, bannerCostPriceBeforeScan - bannerCostPriceNeeded);
 
