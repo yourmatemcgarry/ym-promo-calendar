@@ -737,6 +737,19 @@ const App = (function () {
       </div>`;
   }
 
+  // A deal within 1 percentage point of its target isn't failing outright —
+  // it's close enough that a small price/discount/scan-deal push should get
+  // it there, so it gets its own amber "near target" state instead of
+  // reading the same as a deal that's genuinely well short.
+  const NEAR_TARGET_GAP = 0.01; // 1 percentage point
+  function dealStatusInfo(m) {
+    if (m.targetMarginPct == null || m.bannerMarginPct == null) return { text: "No target set", cls: "muted" };
+    if (m.meetsTarget) return { text: "✓ Meets target", cls: "pos" };
+    const gap = m.targetMarginPct - m.bannerMarginPct; // positive = short of target
+    if (gap <= NEAR_TARGET_GAP + 1e-9) return { text: "⚠ Near target — push pricing", cls: "warn" };
+    return { text: "✗ Below target", cls: "neg" };
+  }
+
   // Deal rows are flex-wrapping cards, not table columns — the status,
   // shelf price and target (the "is this deal okay?" glance-info) always
   // sit together on one line that wraps naturally on narrower screens,
@@ -745,12 +758,11 @@ const App = (function () {
   // COGS, Profit, GP%) sits on a second, more muted line underneath.
   function dealRowHTML(sku, banner, pricing, deal, i, period) {
     const m = computeDeal(sku, banner, pricing, deal, period);
-    const statusText = m.meetsTarget === true ? "✓ Meets target" : m.meetsTarget === false ? "✗ Below target" : "No target set";
-    const statusClass = m.meetsTarget === true ? "pos" : m.meetsTarget === false ? "neg" : "muted";
+    const status = dealStatusInfo(m);
     return `<div class="deal-row" data-i="${i}">
       <div class="deal-row-main">
         <span class="deal-name">${esc(deal.label)}</span>
-        <span class="deal-chip out-status ${statusClass}">${statusText}</span>
+        <span class="deal-chip out-status ${status.cls}">${status.text}</span>
         <label class="deal-inline">Shelf RRP (inc GST)<input type="number" step="0.01" class="rrp-input" value="${deal.shelfRRP}"></label>
         <span class="deal-metric">Banner Margin <strong class="out-margin">${fmtPct(m.bannerMarginPct)}</strong></span>
         <span class="deal-metric">Target <strong class="out-target">${fmtPct(m.targetMarginPct)}</strong></span>
@@ -789,9 +801,10 @@ const App = (function () {
       row.querySelector(".out-gp").textContent = fmtPct(m.gpPct);
       row.querySelector(".out-margin").textContent = fmtPct(m.bannerMarginPct);
       row.querySelector(".out-target").textContent = fmtPct(m.targetMarginPct);
+      const status = dealStatusInfo(m);
       const statusCell = row.querySelector(".out-status");
-      statusCell.textContent = m.meetsTarget === true ? "✓ Meets target" : m.meetsTarget === false ? "✗ Below target" : "No target";
-      statusCell.className = "out-status " + (m.meetsTarget === true ? "pos" : m.meetsTarget === false ? "neg" : "muted");
+      statusCell.textContent = status.text;
+      statusCell.className = "out-status " + status.cls;
       const fillBtn = row.querySelector(".btn-fill-scan");
       if (fillBtn) fillBtn.dataset.required = m.requiredScanDealForTarget != null ? m.requiredScanDealForTarget : "";
     });
