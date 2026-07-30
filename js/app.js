@@ -1633,7 +1633,7 @@ const App = (function () {
 
     // ---------------- Timeline ----------------
     const CAL_EMPTY_ROW_H = 40;
-    const CAL_LANE_H = 44; // per-lane height for two-line bars (price + notes)
+    const CAL_LANE_H = 58; // per-lane height — price line + up to 2 wrapped lines of notes
 
     function calComputeRange() {
       const y = new Date().getFullYear();
@@ -1813,7 +1813,7 @@ const App = (function () {
               const laneCount = Math.max(lanes.length, 1);
               rows.push({
                 type: "sku",
-                height: Math.max(laneCount * CAL_LANE_H + 10, 50),
+                height: Math.max(laneCount * CAL_LANE_H + 10, 64),
                 sku,
                 lanes,
                 groupLabel: group.label,
