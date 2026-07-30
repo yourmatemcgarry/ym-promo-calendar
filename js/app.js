@@ -1723,7 +1723,7 @@ const App = (function () {
       return `<div class="cal-bar cal-status-${d.status}" data-deal="${d.id}" style="left:${left}px;width:${width}px;top:${top}px;background:${bg};border-left-color:${calMarginColor(mStatus)};">
         <span class="cal-handle cal-handle-left" data-handle="left"></span>
         <div class="cal-bar-line1"><span class="cal-badge">${calStatusBadge(d.status)}</span>${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</div>
-        <div class="cal-bar-line2">${esc(sku.packFormat || "")}${disp.linked && disp.shelfRRP != null ? ` · ${fmt$(disp.shelfRRP)}` : ""}</div>
+        <div class="cal-bar-line2">${disp.shelfRRP != null ? fmt$(disp.shelfRRP) : ""}</div>
         <span class="cal-handle cal-handle-right" data-handle="right"></span>
       </div>`;
     }

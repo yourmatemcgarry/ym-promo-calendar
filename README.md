@@ -237,8 +237,8 @@ visible at once (the active one is highlighted); **Jump to Today** re-centres
 without changing zoom.
 
 **Each bar is two lines** — promo name (with status and a 🔗 for linked
-deals) on top, pack size and Shelf RRP underneath — so both stay readable
-even zoomed all the way out, which also makes the timeline screenshot- and
+deals) on top, Shelf RRP underneath — so both stay readable even zoomed
+all the way out, which also makes the timeline screenshot- and
 export-friendly for sharing a deal (or the whole calendar) with someone
 else without them needing to open the tool. The **Table view** carries a
 **Notes** column too (truncated with the full text on hover), so anything
