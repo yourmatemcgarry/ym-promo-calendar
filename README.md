@@ -236,13 +236,21 @@ planning conversations usually look at, so there's nothing to set up first.
 visible at once (the active one is highlighted); **Jump to Today** re-centres
 without changing zoom.
 
-**Each bar is two lines** — promo name (with status and a 🔗 for linked
-deals) on top, Shelf RRP underneath — so both stay readable even zoomed
-all the way out, which also makes the timeline screenshot- and
-export-friendly for sharing a deal (or the whole calendar) with someone
-else without them needing to open the tool. The **Table view** carries a
-**Notes** column too (truncated with the full text on hover), so anything
-written in a deal's Notes field shows up there as well as in the tooltip.
+**Linked deals get their own row per deal type.** Instead of packing
+Everyday, Promo 1, Promo 2 etc. into shared, date-overlap lanes under one
+SKU row, each SKU now shows one line per deal type it's running (Everyday,
+Promo 1, Promo 2...), with the deal type name sitting on the frozen rail
+under the SKU name so it's always visible without opening a bar. Any
+manual (unlinked) deals for that SKU still share a single "Manual entries"
+row, same as before. That frees up the bar itself to focus on just status
++ Shelf RRP — no promo name text to repeat, since the rail already tells
+you what it is — which keeps bars readable even zoomed all the way out and
+makes the timeline screenshot- and export-friendly for sharing with
+someone else without them needing to open the tool. Manual entries keep
+their promo name on the bar (with a 🔗 if linked), since several can still
+share one row. The **Table view** carries a **Notes** column too
+(truncated with the full text on hover), so anything written in a deal's
+Notes field shows up there as well as in the tooltip.
 
 **Every deal you add here can be live-linked to a price point.** When
 adding or editing a deal, tick "Link to this SKU's pricing sheet" (on by

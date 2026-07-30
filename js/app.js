@@ -1633,7 +1633,7 @@ const App = (function () {
 
     // ---------------- Timeline ----------------
     const CAL_EMPTY_ROW_H = 40;
-    const CAL_LANE_H = 44; // per-lane height for two-line bars (was 34 for single-line)
+    const CAL_LANE_H = 34; // per-lane height — bars are single-line now that deal type lives on the rail
 
     function calComputeRange() {
       const y = new Date().getFullYear();
@@ -1669,6 +1669,34 @@ const App = (function () {
         if (!placed) lanes.push([d]);
       });
       return lanes;
+    }
+
+    // Group a SKU's deals into one line per deal type (for linked deals,
+    // so "Everyday (Carton)" and "Promo 1 (Carton)" each get their own row
+    // instead of being packed into shared lanes purely by date) plus a
+    // single "Manual entries" line for anything not live-linked, since
+    // those don't have a deal type to key by.
+    function calSkuLineGroups(skuDeals, banner) {
+      const linkedByType = new Map();
+      const manual = [];
+      skuDeals.forEach((d) => {
+        if (d.linked && d.dealTypeId) {
+          if (!linkedByType.has(d.dealTypeId)) {
+            const dt = (banner.dealTypes || []).find((x) => x.id === d.dealTypeId);
+            linkedByType.set(d.dealTypeId, { label: dt ? dt.label : "(deal type removed)", deals: [] });
+          }
+          linkedByType.get(d.dealTypeId).deals.push(d);
+        } else {
+          manual.push(d);
+        }
+      });
+      const orderedTypeIds = (banner.dealTypes || []).map((dt) => dt.id).filter((id) => linkedByType.has(id));
+      linkedByType.forEach((_, id) => {
+        if (orderedTypeIds.indexOf(id) === -1) orderedTypeIds.push(id);
+      });
+      const groups = orderedTypeIds.map((id) => ({ label: linkedByType.get(id).label, deals: linkedByType.get(id).deals }));
+      if (manual.length) groups.push({ label: "Manual entries", deals: manual });
+      return groups;
     }
 
     function calAxisHtml() {
@@ -1708,7 +1736,7 @@ const App = (function () {
       const offset = calDiffDays(rangeStart, t) * pxPerDay;
       return `<div class="cal-today-line" style="left:${offset}px;" title="Today"></div>`;
     }
-    function calBarHtml(d, sku, laneIdx) {
+    function calBarHtml(d, sku, laneIdx, isManualGroup) {
       const s = calParseDate(d.startDate),
         e = calParseDate(d.endDate);
       const left = calDiffDays(rangeStart, s) * pxPerDay;
@@ -1717,13 +1745,15 @@ const App = (function () {
       const disp = calDealDisplay(d);
       const mStatus = calMarginStatus(disp);
       const bg = calSkuColor(sku.id) + "3d";
-      // Two lines so pack size and shelf price stay legible even zoomed all
-      // the way out or in a screenshot: promo name (+ status/link) on top,
-      // pack size + shelf price underneath.
+      const priceText = disp.shelfRRP != null ? fmt$(disp.shelfRRP) : "";
+      // Deal type now has its own row on the frozen rail, so a linked deal's
+      // bar just needs status + Price. Manual/unlinked deals still share one
+      // row per SKU, so they keep their own name on the bar to stay
+      // distinguishable from each other.
+      const label = isManualGroup ? `${esc(disp.promoName)}${disp.linked ? " 🔗" : ""} ${priceText}` : priceText;
       return `<div class="cal-bar cal-status-${d.status}" data-deal="${d.id}" style="left:${left}px;width:${width}px;top:${top}px;background:${bg};border-left-color:${calMarginColor(mStatus)};">
         <span class="cal-handle cal-handle-left" data-handle="left"></span>
-        <div class="cal-bar-line1"><span class="cal-badge">${calStatusBadge(d.status)}</span>${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</div>
-        <div class="cal-bar-line2">${disp.shelfRRP != null ? fmt$(disp.shelfRRP) : ""}</div>
+        <div class="cal-bar-line1"><span class="cal-badge">${calStatusBadge(d.status)}</span>${label}</div>
         <span class="cal-handle cal-handle-right" data-handle="right"></span>
       </div>`;
     }
@@ -1771,9 +1801,23 @@ const App = (function () {
             const sku = skuById(sid);
             if (!sku) return;
             const skuDeals = bannerDeals.filter((d) => d.skuId === sid);
-            const lanes = calPackLanes(skuDeals);
-            const laneCount = Math.max(lanes.length, 1);
-            rows.push({ type: "sku", height: Math.max(laneCount * CAL_LANE_H + 10, 58), sku, lanes });
+            // One row per deal type (linked deals grouped by dealTypeId, plus
+            // one shared "Manual entries" row) so deal types no longer need
+            // to be packed into shared, date-overlap lanes.
+            const groups = calSkuLineGroups(skuDeals, banner);
+            groups.forEach((group, gi) => {
+              const lanes = calPackLanes(group.deals);
+              const laneCount = Math.max(lanes.length, 1);
+              rows.push({
+                type: "sku",
+                height: Math.max(laneCount * CAL_LANE_H + 10, 40),
+                sku,
+                lanes,
+                groupLabel: group.label,
+                isHeader: gi === 0,
+                isManual: group.label === "Manual entries",
+              });
+            });
           });
         }
         let totalH = rows.reduce((sum, r) => sum + (r.height || CAL_EMPTY_ROW_H), 0);
@@ -1790,17 +1834,25 @@ const App = (function () {
           } else {
             const sku = row.sku,
               lanes = row.lanes;
-            frozenHtml += `<div class="cal-label-cell${sCls}" style="grid-row:${rowIndex};height:${h}px;">
-              <div class="cal-sku-row-top">
-                <span class="cal-sku-dot" style="background:${calSkuColor(sku.id)};"></span>
-                <span class="cal-sku-name" title="${esc(sku.name)}">${esc(sku.name)}</span>
-                <span class="cal-sku-actions"><button class="btn-xs" data-cal-add-banner="${banner.id}" data-cal-add-sku="${sku.id}" title="Add deal for this SKU/banner">+</button></span>
-              </div>
-              <div class="cal-sku-code" title="${esc(sku.packFormat || "")}">${esc(sku.packFormat || "")}</div>
-            </div>`;
+            // First row for a SKU shows the name/dot/actions plus which deal
+            // type this line is (pack format still available via tooltip on
+            // the SKU name); later rows for the same SKU just show the deal
+            // type, indented, since the SKU itself isn't repeated.
+            frozenHtml += row.isHeader
+              ? `<div class="cal-label-cell${sCls}" style="grid-row:${rowIndex};height:${h}px;">
+                  <div class="cal-sku-row-top">
+                    <span class="cal-sku-dot" style="background:${calSkuColor(sku.id)};"></span>
+                    <span class="cal-sku-name" title="${esc(sku.name)}${sku.packFormat ? " · " + esc(sku.packFormat) : ""}">${esc(sku.name)}</span>
+                    <span class="cal-sku-actions"><button class="btn-xs" data-cal-add-banner="${banner.id}" data-cal-add-sku="${sku.id}" title="Add deal for this SKU/banner">+</button></span>
+                  </div>
+                  <div class="cal-sku-code" title="${esc(row.groupLabel)}">${esc(row.groupLabel)}</div>
+                </div>`
+              : `<div class="cal-label-cell${sCls}" style="grid-row:${rowIndex};height:${h}px;">
+                  <div class="cal-sku-subtype" title="${esc(row.groupLabel)}">${esc(row.groupLabel)}</div>
+                </div>`;
             trackHtml += `<div class="cal-track-cell${sCls}" data-banner="${banner.id}" data-sku="${sku.id}" style="grid-row:${rowIndex};height:${h}px;width:${totalPx}px;">
               ${calGridLinesHtml()}${calTodayLineHtml()}
-              ${lanes.map((laneDeals, laneIdx) => laneDeals.map((d) => calBarHtml(d, sku, laneIdx)).join("")).join("")}
+              ${lanes.map((laneDeals, laneIdx) => laneDeals.map((d) => calBarHtml(d, sku, laneIdx, row.isManual)).join("")).join("")}
             </div>`;
           }
           rowIndex++;
