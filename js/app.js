@@ -1533,8 +1533,11 @@ const App = (function () {
   }
 
   route("calendar", async (rest, main) => {
-    const calState = { view: "timeline", zoom: "quarter", filters: { bannerId: "all", skuId: "all", status: "all", search: "" }, sort: { key: "startDate", dir: 1 } };
-    const CAL_PX = { month: 26, quarter: 9, year: 3.2 };
+    // Defaults to the 6-month zoom, scrolled to today — that's the window
+    // most planning conversations actually look at, so it opens on the
+    // right view instead of a full year or a single month.
+    const calState = { view: "timeline", zoom: "half", filters: { bannerId: "all", skuId: "all", status: "all", search: "" }, sort: { key: "startDate", dir: 1 } };
+    const CAL_PX = { month: 26, quarter: 9, half: 5, year: 3.2 };
     let rangeStart, rangeEnd, totalDays, pxPerDay;
 
     function calFilteredDeals() {
@@ -1589,9 +1592,10 @@ const App = (function () {
       <div id="cal-timeline-view">
         <div class="cal-gantt-wrap">
           <div class="cal-gantt-nav">
-            <button class="btn-xs" id="cal-zoom-month">Month</button>
-            <button class="btn-xs" id="cal-zoom-quarter">Quarter</button>
-            <button class="btn-xs" id="cal-zoom-year">Year</button>
+            <button class="btn-xs cal-zoom-btn" id="cal-zoom-month" data-zoom="month">Month</button>
+            <button class="btn-xs cal-zoom-btn" id="cal-zoom-quarter" data-zoom="quarter">Quarter</button>
+            <button class="btn-xs cal-zoom-btn" id="cal-zoom-half" data-zoom="half">6 Months</button>
+            <button class="btn-xs cal-zoom-btn" id="cal-zoom-year" data-zoom="year">Year</button>
             <button class="btn-xs" id="cal-scroll-today">Jump to Today</button>
             <span class="muted small" id="cal-range-label" style="margin-left:auto;"></span>
           </div>
@@ -2243,24 +2247,28 @@ const App = (function () {
       calState.filters.search = e.target.value;
       calRenderAll();
     });
-    document.getElementById("cal-zoom-month").addEventListener("click", () => {
-      calState.zoom = "month";
-      calRenderTimeline();
-    });
-    document.getElementById("cal-zoom-quarter").addEventListener("click", () => {
-      calState.zoom = "quarter";
-      calRenderTimeline();
-    });
-    document.getElementById("cal-zoom-year").addEventListener("click", () => {
-      calState.zoom = "year";
-      calRenderTimeline();
-    });
-    document.getElementById("cal-scroll-today").addEventListener("click", () => {
+    function calScrollToToday(leadInPx) {
       const t = new Date();
       t.setHours(0, 0, 0, 0);
       const offset = calDiffDays(rangeStart, t) * pxPerDay;
-      document.getElementById("cal-gantt-scroll").scrollLeft = Math.max(offset - 200, 0);
+      document.getElementById("cal-gantt-scroll").scrollLeft = Math.max(offset - (leadInPx != null ? leadInPx : 200), 0);
+    }
+    function calSetZoomActive() {
+      document.querySelectorAll(".cal-zoom-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.zoom === calState.zoom));
+    }
+    document.querySelectorAll(".cal-zoom-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        calState.zoom = btn.dataset.zoom;
+        calRenderTimeline();
+        calSetZoomActive();
+        // "6 Months" is meant for forward planning, so line the view up on
+        // today with a small lead-in rather than leaving it wherever the
+        // scroll position happened to be at the old zoom level.
+        if (calState.zoom === "half") calScrollToToday(40);
+      });
     });
+    calSetZoomActive();
+    document.getElementById("cal-scroll-today").addEventListener("click", () => calScrollToToday(200));
     document.getElementById("cal-gantt-scroll").addEventListener("scroll", function () {
       document.getElementById("cal-frozen-inner").style.transform = "translateY(-" + this.scrollTop + "px)";
     });

@@ -230,6 +230,12 @@ resize, double-click empty space on a row to add a deal, plus a sortable
 Table view), but now built directly on top of this pricing sheet instead of
 its own separate dataset.
 
+**It opens on a 6-month view, scrolled to today** — that's the window
+planning conversations usually look at, so there's nothing to set up first.
+**Month / Quarter / 6 Months / Year** zoom buttons switch how much time is
+visible at once (the active one is highlighted); **Jump to Today** re-centres
+without changing zoom.
+
 **Each bar is two lines** — promo name (with status and a 🔗 for linked
 deals) on top, pack size and Shelf RRP underneath — so both stay readable
 even zoomed all the way out, which also makes the timeline screenshot- and
