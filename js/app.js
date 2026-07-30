@@ -1633,7 +1633,7 @@ const App = (function () {
 
     // ---------------- Timeline ----------------
     const CAL_EMPTY_ROW_H = 40;
-    const CAL_LANE_H = 34; // per-lane height — bars are single-line now that deal type lives on the rail
+    const CAL_LANE_H = 44; // per-lane height for two-line bars (price + notes)
 
     function calComputeRange() {
       const y = new Date().getFullYear();
@@ -1747,13 +1747,16 @@ const App = (function () {
       const bg = calSkuColor(sku.id) + "3d";
       const priceText = disp.shelfRRP != null ? fmt$(disp.shelfRRP) : "";
       // Deal type now has its own row on the frozen rail, so a linked deal's
-      // bar just needs status + Price. Manual/unlinked deals still share one
-      // row per SKU, so they keep their own name on the bar to stay
-      // distinguishable from each other.
+      // top line just needs status + Price. Manual/unlinked deals still
+      // share one row per SKU, so they keep their own name on the bar to
+      // stay distinguishable from each other. The second line surfaces the
+      // deal's Notes (if any), so context still travels with the bar itself
+      // — handy when screenshotting/exporting for someone else.
       const label = isManualGroup ? `${esc(disp.promoName)}${disp.linked ? " 🔗" : ""} ${priceText}` : priceText;
       return `<div class="cal-bar cal-status-${d.status}" data-deal="${d.id}" style="left:${left}px;width:${width}px;top:${top}px;background:${bg};border-left-color:${calMarginColor(mStatus)};">
         <span class="cal-handle cal-handle-left" data-handle="left"></span>
         <div class="cal-bar-line1"><span class="cal-badge">${calStatusBadge(d.status)}</span>${label}</div>
+        <div class="cal-bar-line2">${d.notes ? esc(d.notes) : ""}</div>
         <span class="cal-handle cal-handle-right" data-handle="right"></span>
       </div>`;
     }
@@ -1810,7 +1813,7 @@ const App = (function () {
               const laneCount = Math.max(lanes.length, 1);
               rows.push({
                 type: "sku",
-                height: Math.max(laneCount * CAL_LANE_H + 10, 40),
+                height: Math.max(laneCount * CAL_LANE_H + 10, 50),
                 sku,
                 lanes,
                 groupLabel: group.label,

@@ -242,15 +242,16 @@ SKU row, each SKU now shows one line per deal type it's running (Everyday,
 Promo 1, Promo 2...), with the deal type name sitting on the frozen rail
 under the SKU name so it's always visible without opening a bar. Any
 manual (unlinked) deals for that SKU still share a single "Manual entries"
-row, same as before. That frees up the bar itself to focus on just status
-+ Shelf RRP — no promo name text to repeat, since the rail already tells
-you what it is — which keeps bars readable even zoomed all the way out and
-makes the timeline screenshot- and export-friendly for sharing with
-someone else without them needing to open the tool. Manual entries keep
-their promo name on the bar (with a 🔗 if linked), since several can still
-share one row. The **Table view** carries a **Notes** column too
-(truncated with the full text on hover), so anything written in a deal's
-Notes field shows up there as well as in the tooltip.
+row, same as before.
+
+**Each bar is still two lines**, but simpler now that the deal type lives
+on the rail: line one is status + Shelf RRP (or promo name + price for
+manual entries, since several of those can still share one row) — no
+repeated promo-name text, since the rail already tells you what it is.
+Line two is whatever's in that deal's **Notes** field, so context still
+travels with the bar itself — handy when screenshotting or exporting the
+timeline for someone else. The **Table view** carries a **Notes** column
+too (truncated with the full text on hover).
 
 **Every deal you add here can be live-linked to a price point.** When
 adding or editing a deal, tick "Link to this SKU's pricing sheet" (on by
