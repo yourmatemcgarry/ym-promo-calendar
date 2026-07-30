@@ -234,6 +234,7 @@ textarea { min-height: 60px; resize: vertical; }
 .deal-chip.neg { background: rgba(226, 72, 61, 0.1); }
 .deal-chip.pos { background: rgba(47, 143, 106, 0.12); }
 .deal-chip.warn { background: rgba(201, 141, 23, 0.14); }
+.deal-status-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0; }
 .deal-metric { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .deal-metric strong { color: var(--ink); font-weight: 700; }
 .deal-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); margin: 0; width: auto; font-weight: 500; white-space: nowrap; }

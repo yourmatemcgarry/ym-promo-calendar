@@ -142,6 +142,14 @@ Deal $ are both live inputs**: change either one (or the Discount) and
 every computed figure recalculates instantly, with nothing saved until you
 click **Save card**.
 
+**Deal status has three colours**, shown as a chip on each deal row (and a
+legend right above the deal list on every banner page, so it's always in
+view): green **✓ Meets target** once Banner Margin is at or above the
+deal's target; amber **⚠ Near target — push pricing** when it's below
+target but within **1.5 percentage points** of it — close enough that a
+small nudge to Shelf RRP, Discount or Scan Deal should get it there; red
+**✗ Below target** for anything further short than that.
+
 **Discount $/carton** and **Scan deal $/unit** are both deal-specific
 levers, on top of the everyday terms above, and both work the same way in
 one important respect: **the bigger either one is, the lower the banner's

@@ -724,6 +724,11 @@ const App = (function () {
             ? `<p class="muted small">List price is set once for every <strong>${esc(banner.distributor)}</strong> banner on the <a href="#/sku-tool">SKU Tool</a> page${dp ? "" : " — no price has been set for this SKU yet, defaulting to $0"}.</p>`
             : ""
         }
+        <p class="muted small deal-status-legend">
+          <span class="deal-chip pos">✓ Meets target</span>
+          <span class="deal-chip warn">⚠ Near target — push pricing</span> <span>within ${fmtPct(NEAR_TARGET_GAP)} of target</span>
+          <span class="deal-chip neg">✗ Below target</span> <span>more than ${fmtPct(NEAR_TARGET_GAP)} short</span>
+        </p>
         <div class="deal-list">
           ${pricing.deals.map((deal, i) => dealRowHTML(sku, banner, pricing, deal, i, period)).join("") || '<p class="muted small">No deals yet — use "+ Add deal…" below.</p>'}
         </div>
@@ -741,7 +746,7 @@ const App = (function () {
   // it's close enough that a small price/discount/scan-deal push should get
   // it there, so it gets its own amber "near target" state instead of
   // reading the same as a deal that's genuinely well short.
-  const NEAR_TARGET_GAP = 0.01; // 1 percentage point
+  const NEAR_TARGET_GAP = 0.015; // 1.5 percentage points
   function dealStatusInfo(m) {
     if (m.targetMarginPct == null || m.bannerMarginPct == null) return { text: "No target set", cls: "muted" };
     if (m.meetsTarget) return { text: "✓ Meets target", cls: "pos" };
