@@ -88,6 +88,7 @@ h4 { font-size: 13.5px; margin: 14px 0 6px; color: var(--muted); text-transform:
 .small { font-size: 12.5px; }
 .pos { color: var(--pos); font-weight: 600; }
 .neg { color: var(--neg); font-weight: 600; }
+.warn { color: var(--accent-warm-dark); font-weight: 600; }
 
 .badge {
   display: inline-block;
@@ -232,6 +233,7 @@ textarea { min-height: 60px; resize: vertical; }
 .deal-chip { padding: 2px 9px; border-radius: 12px; font-size: 11.5px; font-weight: 700; background: rgba(15, 125, 116, 0.08); white-space: nowrap; }
 .deal-chip.neg { background: rgba(226, 72, 61, 0.1); }
 .deal-chip.pos { background: rgba(47, 143, 106, 0.12); }
+.deal-chip.warn { background: rgba(201, 141, 23, 0.14); }
 .deal-metric { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .deal-metric strong { color: var(--ink); font-weight: 700; }
 .deal-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); margin: 0; width: auto; font-weight: 500; white-space: nowrap; }
