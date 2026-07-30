@@ -1614,7 +1614,7 @@ const App = (function () {
             <th data-sort="banner">Banner</th><th data-sort="sku">SKU</th><th data-sort="cycleInstance">Cycle</th>
             <th data-sort="promoName">Promo</th><th>Shelf RRP (inc GST)</th><th data-sort="startDate">Start</th><th data-sort="endDate">End</th>
             <th data-sort="targetMarginPct">Target %</th><th data-sort="actualMarginPct">Actual %</th>
-            <th data-sort="status">Status</th><th></th>
+            <th data-sort="status">Status</th><th>Notes</th><th></th>
           </tr></thead>
           <tbody id="cal-table-body"></tbody>
         </table></div>
@@ -1629,6 +1629,7 @@ const App = (function () {
 
     // ---------------- Timeline ----------------
     const CAL_EMPTY_ROW_H = 40;
+    const CAL_LANE_H = 44; // per-lane height for two-line bars (was 34 for single-line)
 
     function calComputeRange() {
       const y = new Date().getFullYear();
@@ -1708,14 +1709,17 @@ const App = (function () {
         e = calParseDate(d.endDate);
       const left = calDiffDays(rangeStart, s) * pxPerDay;
       const width = Math.max(calDiffDays(s, e) * pxPerDay, 10);
-      const top = laneIdx * 34 + 6;
+      const top = laneIdx * CAL_LANE_H + 5;
       const disp = calDealDisplay(d);
       const mStatus = calMarginStatus(disp);
       const bg = calSkuColor(sku.id) + "3d";
+      // Two lines so pack size and shelf price stay legible even zoomed all
+      // the way out or in a screenshot: promo name (+ status/link) on top,
+      // pack size + shelf price underneath.
       return `<div class="cal-bar cal-status-${d.status}" data-deal="${d.id}" style="left:${left}px;width:${width}px;top:${top}px;background:${bg};border-left-color:${calMarginColor(mStatus)};">
         <span class="cal-handle cal-handle-left" data-handle="left"></span>
-        <span class="cal-badge">${calStatusBadge(d.status)}</span>
-        <span>${esc(disp.promoName)}${disp.linked && disp.shelfRRP != null ? ` · ${fmt$(disp.shelfRRP)}` : ""}${disp.linked ? " 🔗" : ""}</span>
+        <div class="cal-bar-line1"><span class="cal-badge">${calStatusBadge(d.status)}</span>${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</div>
+        <div class="cal-bar-line2">${esc(sku.packFormat || "")}${disp.linked && disp.shelfRRP != null ? ` · ${fmt$(disp.shelfRRP)}` : ""}</div>
         <span class="cal-handle cal-handle-right" data-handle="right"></span>
       </div>`;
     }
@@ -1765,7 +1769,7 @@ const App = (function () {
             const skuDeals = bannerDeals.filter((d) => d.skuId === sid);
             const lanes = calPackLanes(skuDeals);
             const laneCount = Math.max(lanes.length, 1);
-            rows.push({ type: "sku", height: Math.max(laneCount * 34 + 10, 58), sku, lanes });
+            rows.push({ type: "sku", height: Math.max(laneCount * CAL_LANE_H + 10, 58), sku, lanes });
           });
         }
         let totalH = rows.reduce((sum, r) => sum + (r.height || CAL_EMPTY_ROW_H), 0);
@@ -1920,7 +1924,8 @@ const App = (function () {
         (disp.shelfRRP != null ? `<div class="cal-row"><span>Shelf RRP (inc GST)</span><span>${fmt$(disp.shelfRRP)}</span></div>` : "") +
         `<div class="cal-row"><span>Target margin</span><span>${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "—"}</span></div>` +
         `<div class="cal-row"><span>Actual/banner margin</span><span>${disp.actualMarginPct != null ? fmtPct(disp.actualMarginPct) : "—"} (${mLabel})</span></div>` +
-        `<div class="cal-row"><span>Status</span><span>${esc(deal.status)}</span></div>`;
+        `<div class="cal-row"><span>Status</span><span>${esc(deal.status)}</span></div>` +
+        (deal.notes ? `<div class="cal-muted" style="margin-top:4px;">${esc(deal.notes)}</div>` : "");
       document.body.appendChild(calTooltipEl);
       calPositionTooltip(e);
     }
@@ -1968,7 +1973,7 @@ const App = (function () {
       });
       const tbody = document.getElementById("cal-table-body");
       if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" class="muted" style="text-align:center;padding:20px;">No deals match the current filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="muted" style="text-align:center;padding:20px;">No deals match the current filters.</td></tr>';
         return;
       }
       tbody.innerHTML = rows
@@ -1987,6 +1992,7 @@ const App = (function () {
           <td>${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "—"}</td>
           <td>${disp.actualMarginPct != null ? fmtPct(disp.actualMarginPct) : "—"}</td>
           <td><span class="cal-flag" style="background:${calMarginColor(mStatus)}"></span>${esc(d.status)}</td>
+          <td class="cal-notes-cell" title="${esc(d.notes || "")}">${d.notes ? esc(d.notes) : '<span class="muted">—</span>'}</td>
           <td><button class="btn-xs" data-cal-tbl-edit="${d.id}">Edit</button> <button class="btn-xs" data-cal-tbl-dup="${d.id}">Dup</button> <button class="btn-xs" data-cal-tbl-del="${d.id}">Del</button></td>
         </tr>`;
         })

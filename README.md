@@ -230,6 +230,14 @@ resize, double-click empty space on a row to add a deal, plus a sortable
 Table view), but now built directly on top of this pricing sheet instead of
 its own separate dataset.
 
+**Each bar is two lines** — promo name (with status and a 🔗 for linked
+deals) on top, pack size and Shelf RRP underneath — so both stay readable
+even zoomed all the way out, which also makes the timeline screenshot- and
+export-friendly for sharing a deal (or the whole calendar) with someone
+else without them needing to open the tool. The **Table view** carries a
+**Notes** column too (truncated with the full text on hover), so anything
+written in a deal's Notes field shows up there as well as in the tooltip.
+
 **Every deal you add here can be live-linked to a price point.** When
 adding or editing a deal, tick "Link to this SKU's pricing sheet" (on by
 default) and pick a Banner → SKU → Deal type. That's it — no promo name,
