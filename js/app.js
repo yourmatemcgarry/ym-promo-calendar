@@ -765,14 +765,15 @@ const App = (function () {
     return { text: "✗ Below target", cls: "neg", gapText: fmtGapPt(delta), gapCls: "neg" };
   }
 
-  // Deal rows are grid rows so Shelf RRP, Margin and the gap-to-target chip
-  // line up in columns — that's what makes scanning down a list of deals
-  // and comparing them against each other fast, instead of having to read
-  // each card's prose individually. Status is a small colored dot (the
-  // legend above explains the colors) rather than a repeated text pill.
-  // The $ breakdown (Target, Discount, Scan, YM Net, COGS, Profit, GP%)
-  // is behind a chevron toggle per row so the default view stays compact;
-  // click it open to edit Discount/Scan or see the full picture.
+  // Deal rows are grid rows so name, Shelf RRP, Discount, Margin, Target
+  // and the gap-to-target chip all line up in columns — that's what makes
+  // scanning down a list of deals and comparing them against each other
+  // fast, instead of having to read each card's prose individually. Status
+  // is a small colored dot (the legend above explains the colors) rather
+  // than a repeated text pill. Only Scan Deal and the $ breakdown (YM Net,
+  // COGS, Profit, GP%) are behind the chevron toggle — everything you'd
+  // want for a quick "is this deal okay?" check is visible without opening
+  // a row.
   function dealRowHTML(sku, banner, pricing, deal, i, period) {
     const m = computeDeal(sku, banner, pricing, deal, period);
     const status = dealStatusInfo(m);
@@ -782,14 +783,26 @@ const App = (function () {
           <span class="deal-dot ${status.cls}" title="${esc(status.text)}"></span>
           <span class="deal-name">${esc(deal.label)}</span>
         </div>
-        <label class="deal-inline deal-rrp-cell">Shelf RRP (inc GST)<input type="number" step="0.01" class="rrp-input" value="${deal.shelfRRP}"></label>
-        <span class="deal-margin-cell">Margin <strong class="out-margin">${fmtPct(m.bannerMarginPct)}</strong></span>
+        <div class="deal-mini">
+          <span class="deal-mini-label" title="Shelf RRP (inc GST)">Shelf RRP</span>
+          <input type="number" step="0.01" class="rrp-input" value="${deal.shelfRRP}">
+        </div>
+        <div class="deal-mini">
+          <span class="deal-mini-label" title="Discount $/carton">Discount $</span>
+          <input type="number" step="0.01" class="discount-input" value="${deal.discountPerCarton || 0}">
+        </div>
+        <div class="deal-mini deal-mini-readout">
+          <span class="deal-mini-label">Margin</span>
+          <strong class="out-margin">${fmtPct(m.bannerMarginPct)}</strong>
+        </div>
+        <div class="deal-mini deal-mini-readout">
+          <span class="deal-mini-label">Target</span>
+          <strong class="out-target">${fmtPct(m.targetMarginPct)}</strong>
+        </div>
         <span class="deal-chip out-status ${status.gapCls}" title="vs target">${status.gapText}</span>
         <button class="btn-xs deal-expand-btn" aria-expanded="false" aria-label="Show deal details">▾</button>
       </div>
       <div class="deal-row-detail">
-        <span class="deal-metric">Target <strong class="out-target">${fmtPct(m.targetMarginPct)}</strong></span>
-        <label class="deal-inline">Discount $/ctn<input type="number" step="0.01" class="discount-input" value="${deal.discountPerCarton || 0}"></label>
         <label class="deal-inline">Scan $/unit<input type="number" step="0.01" class="scan-input" value="${deal.scanDeal || 0}"></label>
         <span>YM Net <strong class="out-net">${fmt$(m.ymNetDeal)}</strong></span>
         <span>YM COGS <strong class="out-cogs">${fmt$(m.cost.total)}</strong></span>

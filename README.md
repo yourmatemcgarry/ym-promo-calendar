@@ -134,18 +134,17 @@ pick fee and the fee/rebate waterfall — no target margins there anymore.
 
 **Each banner page lists every SKU as its own card**, list price at the
 top and its deals underneath, one per row. Every deal row lines up in
-columns — name, Shelf RRP, Banner Margin, and how far it is from target —
-so comparing deals means scanning straight down the list instead of
-reading each one's prose separately. Instead of showing Margin and Target
-as two separate numbers you have to subtract yourself, the row shows the
-**gap directly** as a signed chip (e.g. **+0.3pt** or **-0.9pt**), colour-
-coded the same as the status dot next to the deal name. Click the chevron
-on the right of any row to expand it — that reveals Target, the
-Discount/Scan Deal inputs, and the full $ breakdown (YM Net, YM COGS,
-Profit, YM GP%). **Shelf RRP and Scan Deal $ are both live inputs**:
-change either one (or the Discount, once expanded) and every computed
-figure recalculates instantly, with nothing saved until you click
-**Save card**.
+columns — name, Shelf RRP, Discount, Banner Margin, Target, and how far
+it is from target — so comparing deals means scanning straight down the
+list instead of reading each one's prose separately. Instead of showing
+Margin and Target as two separate numbers you have to subtract yourself,
+the row also shows the **gap directly** as a signed chip (e.g. **+0.3pt**
+or **-0.9pt**), colour-coded the same as the status dot next to the deal
+name. Click the chevron on the right of any row to expand it for Scan
+Deal and the full $ breakdown (YM Net, YM COGS, Profit, YM GP%).
+**Shelf RRP, Discount and Scan Deal $ are all live inputs**: change any
+of them and every computed figure recalculates instantly, with nothing
+saved until you click **Save card**.
 
 **Deal status has three colours**, shown as the dot next to each deal's
 name (and a legend right above the deal list on every banner page, so
