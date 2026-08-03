@@ -747,32 +747,48 @@ const App = (function () {
   // it there, so it gets its own amber "near target" state instead of
   // reading the same as a deal that's genuinely well short.
   const NEAR_TARGET_GAP = 0.015; // 1.5 percentage points
+  // gapText is the signed distance from target in percentage points
+  // (e.g. "+0.3pt" or "-0.9pt") — showing the gap directly means you don't
+  // have to mentally subtract Margin from Target to see how close a deal
+  // is, which is the whole point when scanning a list of deals at once.
+  function fmtGapPt(deltaFraction) {
+    const pts = deltaFraction * 100;
+    const sign = pts > 0 ? "+" : "";
+    return `${sign}${pts.toFixed(1)}pt`;
+  }
   function dealStatusInfo(m) {
-    if (m.targetMarginPct == null || m.bannerMarginPct == null) return { text: "No target set", cls: "muted" };
-    if (m.meetsTarget) return { text: "✓ Meets target", cls: "pos" };
-    const gap = m.targetMarginPct - m.bannerMarginPct; // positive = short of target
-    if (gap <= NEAR_TARGET_GAP + 1e-9) return { text: "⚠ Near target — push pricing", cls: "warn" };
-    return { text: "✗ Below target", cls: "neg" };
+    if (m.targetMarginPct == null || m.bannerMarginPct == null) return { text: "No target set", cls: "muted", gapText: "No target", gapCls: "muted" };
+    const delta = m.bannerMarginPct - m.targetMarginPct; // positive = above target (good)
+    if (m.meetsTarget) return { text: "✓ Meets target", cls: "pos", gapText: fmtGapPt(delta), gapCls: "pos" };
+    const gap = -delta; // positive = short of target
+    if (gap <= NEAR_TARGET_GAP + 1e-9) return { text: "⚠ Near target — push pricing", cls: "warn", gapText: fmtGapPt(delta), gapCls: "warn" };
+    return { text: "✗ Below target", cls: "neg", gapText: fmtGapPt(delta), gapCls: "neg" };
   }
 
-  // Deal rows are flex-wrapping cards, not table columns — the status,
-  // shelf price and target (the "is this deal okay?" glance-info) always
-  // sit together on one line that wraps naturally on narrower screens,
-  // instead of forcing a wide table that needs horizontal scrolling to see
-  // whether a deal is meeting its target. The full $ breakdown (YM Net,
-  // COGS, Profit, GP%) sits on a second, more muted line underneath.
+  // Deal rows are grid rows so Shelf RRP, Margin and the gap-to-target chip
+  // line up in columns — that's what makes scanning down a list of deals
+  // and comparing them against each other fast, instead of having to read
+  // each card's prose individually. Status is a small colored dot (the
+  // legend above explains the colors) rather than a repeated text pill.
+  // The $ breakdown (Target, Discount, Scan, YM Net, COGS, Profit, GP%)
+  // is behind a chevron toggle per row so the default view stays compact;
+  // click it open to edit Discount/Scan or see the full picture.
   function dealRowHTML(sku, banner, pricing, deal, i, period) {
     const m = computeDeal(sku, banner, pricing, deal, period);
     const status = dealStatusInfo(m);
     return `<div class="deal-row" data-i="${i}">
-      <div class="deal-row-main">
-        <span class="deal-name">${esc(deal.label)}</span>
-        <span class="deal-chip out-status ${status.cls}">${status.text}</span>
-        <label class="deal-inline">Shelf RRP (inc GST)<input type="number" step="0.01" class="rrp-input" value="${deal.shelfRRP}"></label>
-        <span class="deal-metric">Banner Margin <strong class="out-margin">${fmtPct(m.bannerMarginPct)}</strong></span>
-        <span class="deal-metric">Target <strong class="out-target">${fmtPct(m.targetMarginPct)}</strong></span>
+      <div class="deal-row-grid">
+        <div class="deal-name-cell">
+          <span class="deal-dot ${status.cls}" title="${esc(status.text)}"></span>
+          <span class="deal-name">${esc(deal.label)}</span>
+        </div>
+        <label class="deal-inline deal-rrp-cell">Shelf RRP (inc GST)<input type="number" step="0.01" class="rrp-input" value="${deal.shelfRRP}"></label>
+        <span class="deal-margin-cell">Margin <strong class="out-margin">${fmtPct(m.bannerMarginPct)}</strong></span>
+        <span class="deal-chip out-status ${status.gapCls}" title="vs target">${status.gapText}</span>
+        <button class="btn-xs deal-expand-btn" aria-expanded="false" aria-label="Show deal details">▾</button>
       </div>
       <div class="deal-row-detail">
+        <span class="deal-metric">Target <strong class="out-target">${fmtPct(m.targetMarginPct)}</strong></span>
         <label class="deal-inline">Discount $/ctn<input type="number" step="0.01" class="discount-input" value="${deal.discountPerCarton || 0}"></label>
         <label class="deal-inline">Scan $/unit<input type="number" step="0.01" class="scan-input" value="${deal.scanDeal || 0}"></label>
         <span>YM Net <strong class="out-net">${fmt$(m.ymNetDeal)}</strong></span>
@@ -807,9 +823,12 @@ const App = (function () {
       row.querySelector(".out-margin").textContent = fmtPct(m.bannerMarginPct);
       row.querySelector(".out-target").textContent = fmtPct(m.targetMarginPct);
       const status = dealStatusInfo(m);
+      const dot = row.querySelector(".deal-dot");
+      dot.className = "deal-dot " + status.cls;
+      dot.title = status.text;
       const statusCell = row.querySelector(".out-status");
-      statusCell.textContent = status.text;
-      statusCell.className = "out-status " + status.cls;
+      statusCell.textContent = status.gapText;
+      statusCell.className = "deal-chip out-status " + status.gapCls;
       const fillBtn = row.querySelector(".btn-fill-scan");
       if (fillBtn) fillBtn.dataset.required = m.requiredScanDealForTarget != null ? m.requiredScanDealForTarget : "";
     });
@@ -825,6 +844,12 @@ const App = (function () {
       if (e.target.classList.contains("rrp-input") || e.target.classList.contains("discount-input") || e.target.classList.contains("scan-input")) recalc();
     });
     cardEl.addEventListener("click", (e) => {
+      if (e.target.classList.contains("deal-expand-btn")) {
+        const row = e.target.closest(".deal-row");
+        const expanded = row.classList.toggle("expanded");
+        e.target.setAttribute("aria-expanded", expanded ? "true" : "false");
+        e.target.textContent = expanded ? "▴" : "▾";
+      }
       if (e.target.classList.contains("btn-fill-scan")) {
         const row = e.target.closest(".deal-row");
         const required = e.target.dataset.required;

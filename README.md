@@ -133,22 +133,28 @@ type's target. The **Terms** panel is now only distributor fee, freight,
 pick fee and the fee/rebate waterfall — no target margins there anymore.
 
 **Each banner page lists every SKU as its own card**, list price at the
-top and its deals underneath, one per row. Each deal row's top line is the
-"is this okay?" glance-info — deal name, status, Shelf RRP, Banner Margin,
-Target — sized to always fit on screen without side-scrolling; the $
-breakdown (YM Net, YM COGS, Profit, YM GP%) sits on a second, quieter line
-underneath, along with the Discount/Scan Deal inputs. **Shelf RRP and Scan
-Deal $ are both live inputs**: change either one (or the Discount) and
-every computed figure recalculates instantly, with nothing saved until you
-click **Save card**.
+top and its deals underneath, one per row. Every deal row lines up in
+columns — name, Shelf RRP, Banner Margin, and how far it is from target —
+so comparing deals means scanning straight down the list instead of
+reading each one's prose separately. Instead of showing Margin and Target
+as two separate numbers you have to subtract yourself, the row shows the
+**gap directly** as a signed chip (e.g. **+0.3pt** or **-0.9pt**), colour-
+coded the same as the status dot next to the deal name. Click the chevron
+on the right of any row to expand it — that reveals Target, the
+Discount/Scan Deal inputs, and the full $ breakdown (YM Net, YM COGS,
+Profit, YM GP%). **Shelf RRP and Scan Deal $ are both live inputs**:
+change either one (or the Discount, once expanded) and every computed
+figure recalculates instantly, with nothing saved until you click
+**Save card**.
 
-**Deal status has three colours**, shown as a chip on each deal row (and a
-legend right above the deal list on every banner page, so it's always in
-view): green **✓ Meets target** once Banner Margin is at or above the
-deal's target; amber **⚠ Near target — push pricing** when it's below
-target but within **1.5 percentage points** of it — close enough that a
-small nudge to Shelf RRP, Discount or Scan Deal should get it there; red
-**✗ Below target** for anything further short than that.
+**Deal status has three colours**, shown as the dot next to each deal's
+name (and a legend right above the deal list on every banner page, so
+it's always in view): green once Banner Margin is at or above the deal's
+target; amber when it's below target but within **1.5 percentage points**
+of it — close enough that a small nudge to Shelf RRP, Discount or Scan
+Deal should get it there; red for anything further short than that. The
+gap chip uses the same colours, so you can tell a deal's status at a
+glance without opening it.
 
 **Discount $/carton** and **Scan deal $/unit** are both deal-specific
 levers, on top of the everyday terms above, and both work the same way in
