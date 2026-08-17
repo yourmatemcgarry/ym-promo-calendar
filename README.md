@@ -249,14 +249,20 @@ under the SKU name so it's always visible without opening a bar. Any
 manual (unlinked) deals for that SKU still share a single "Manual entries"
 row, same as before.
 
-**Each bar is still two lines**, but simpler now that the deal type lives
-on the rail: line one is status + Shelf RRP (or promo name + price for
-manual entries, since several of those can still share one row) — no
-repeated promo-name text, since the rail already tells you what it is.
-Line two is whatever's in that deal's **Notes** field, so context still
-travels with the bar itself — handy when screenshotting or exporting the
-timeline for someone else. The **Table view** carries a **Notes** column
-too (truncated with the full text on hover).
+**Each bar is still two lines** — line one is status + Shelf RRP (or promo
+name + price for manual entries, since several of those can share one
+row); line two is whatever's in that deal's **Notes** field, so context
+still travels with the bar itself. **Short promos no longer lose that
+text.** At a wide zoom like 6 Months, a one- or two-week promo can be just
+a handful of pixels wide — too narrow for any text at all. Rather than
+clip the label down to illegibility, the label now spills into whatever
+empty space follows in the same row, up to wherever the next deal for
+that deal type starts (or the edge of the timeline) — same idea as a
+label spilling out beside a short bar in a Gantt chart. The colored bar
+still marks the true dates; only the text is free to extend past it, so
+you can read what a short promo is without having to switch to Month zoom
+or open it. The **Table view** carries a **Notes** column too (truncated
+with the full text on hover).
 
 **Every deal you add here can be live-linked to a price point.** When
 adding or editing a deal, tick "Link to this SKU's pricing sheet" (on by

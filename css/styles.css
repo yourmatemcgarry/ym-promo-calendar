@@ -339,9 +339,17 @@ textarea { min-height: 60px; resize: vertical; }
 /* Two-line bars: promo name (+ status/link) on top, pack size + shelf price
    underneath — so both are still readable when zoomed all the way out or
    in a screenshot, without needing to hover for the tooltip. */
-.cal-bar { position: absolute; height: 50px; border-radius: 5px; top: 4px; cursor: grab; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 6px; font-size: 11px; color: var(--ink); overflow: hidden; border-left: 5px solid var(--muted); box-shadow: 0 1px 2px rgba(0,0,0,.08); user-select: none; }
+.cal-bar { position: absolute; height: 50px; border-radius: 5px; top: 4px; cursor: grab; font-size: 11px; color: var(--ink); overflow: visible; border-left: 5px solid var(--muted); box-shadow: 0 1px 2px rgba(0,0,0,.08); user-select: none; }
 .cal-bar:active { cursor: grabbing; }
-.cal-bar-line1 { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+/* The label sits in its own box, sized independently of the colored bar
+   behind it (see calBarHtml) — short promos get a bar that marks the true
+   date range plus text that's free to spill into whatever empty space
+   follows in the same lane, instead of being clipped to the bar's own
+   (sometimes tiny) width. It's still a normal descendant of .cal-bar, so
+   hover/click/drag on the overflowing part of the label work exactly the
+   same as clicking the bar itself. */
+.cal-bar-text { position: absolute; top: 50%; left: 6px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; }
+.cal-bar-line1 { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Notes wrap across up to 2 lines instead of being cut off after a few
    characters — full text is still in the tooltip on hover if it runs
    longer than that. */

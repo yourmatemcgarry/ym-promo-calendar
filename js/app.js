@@ -1774,7 +1774,7 @@ const App = (function () {
       const offset = calDiffDays(rangeStart, t) * pxPerDay;
       return `<div class="cal-today-line" style="left:${offset}px;" title="Today"></div>`;
     }
-    function calBarHtml(d, sku, laneIdx, isManualGroup) {
+    function calBarHtml(d, sku, laneIdx, isManualGroup, availPx) {
       const s = calParseDate(d.startDate),
         e = calParseDate(d.endDate);
       const left = calDiffDays(rangeStart, s) * pxPerDay;
@@ -1791,10 +1791,24 @@ const App = (function () {
       // deal's Notes (if any), so context still travels with the bar itself
       // — handy when screenshotting/exporting for someone else.
       const label = isManualGroup ? `${esc(disp.promoName)}${disp.linked ? " 🔗" : ""} ${priceText}` : priceText;
+      // A short promo at a wide zoom can be just a handful of pixels wide —
+      // far too narrow to hold any text at all. Rather than clip the label
+      // to the bar's own true date-span width, let it spill into whatever
+      // empty space follows in the same lane (up to the next deal, or the
+      // edge of the timeline). The colored bar still marks the real dates;
+      // only the text extends past it, same idea as a Gantt chart label
+      // spilling out beside a short task. Always keep at least MIN_LABEL_PX
+      // even if that's more room than is actually free — for two promos
+      // back-to-back with no gap, a sliver of overlap into the next bar
+      // beats a label that's collapsed down to nothing.
+      const MIN_LABEL_PX = 70;
+      const labelWidth = Math.max(Math.min((availPx || width) - 10, 260), MIN_LABEL_PX);
       return `<div class="cal-bar cal-status-${d.status}" data-deal="${d.id}" style="left:${left}px;width:${width}px;top:${top}px;background:${bg};border-left-color:${calMarginColor(mStatus)};">
         <span class="cal-handle cal-handle-left" data-handle="left"></span>
-        <div class="cal-bar-line1"><span class="cal-badge">${calStatusBadge(d.status)}</span>${label}</div>
-        <div class="cal-bar-line2">${d.notes ? esc(d.notes) : ""}</div>
+        <div class="cal-bar-text" style="width:${labelWidth}px;">
+          <div class="cal-bar-line1"><span class="cal-badge">${calStatusBadge(d.status)}</span>${label}</div>
+          <div class="cal-bar-line2">${d.notes ? esc(d.notes) : ""}</div>
+        </div>
         <span class="cal-handle cal-handle-right" data-handle="right"></span>
       </div>`;
     }
@@ -1893,7 +1907,18 @@ const App = (function () {
                 </div>`;
             trackHtml += `<div class="cal-track-cell${sCls}" data-banner="${banner.id}" data-sku="${sku.id}" style="grid-row:${rowIndex};height:${h}px;width:${totalPx}px;">
               ${calGridLinesHtml()}${calTodayLineHtml()}
-              ${lanes.map((laneDeals, laneIdx) => laneDeals.map((d) => calBarHtml(d, sku, laneIdx, row.isManual)).join("")).join("")}
+              ${lanes
+                .map((laneDeals, laneIdx) =>
+                  laneDeals
+                    .map((d, k) => {
+                      const dLeft = calDiffDays(rangeStart, calParseDate(d.startDate)) * pxPerDay;
+                      const nextLeft = laneDeals[k + 1] ? calDiffDays(rangeStart, calParseDate(laneDeals[k + 1].startDate)) * pxPerDay : totalPx;
+                      const availPx = Math.max(nextLeft - dLeft, 10);
+                      return calBarHtml(d, sku, laneIdx, row.isManual, availPx);
+                    })
+                    .join("")
+                )
+                .join("")}
             </div>`;
           }
           rowIndex++;
