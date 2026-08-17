@@ -228,41 +228,57 @@ ready to switch a banner over to shared distributor pricing.
 
 ## Promo Calendar
 
-**Promo Calendar** is the timeline view merged in from your separate promo
-tracker tool — same Gantt-style layout (a frozen Banner/SKU rail next to a
-scrollable date grid, drag a bar to shift its dates, drag its edges to
-resize, double-click empty space on a row to add a deal, plus a sortable
-Table view), but now built directly on top of this pricing sheet instead of
-its own separate dataset.
+**Promo Calendar** started as the timeline view merged in from your
+separate promo tracker tool, but now built directly on top of this
+pricing sheet instead of its own separate dataset. It has three views —
+**Agenda, Timeline** and **Table** — pick whichever fits what you're
+doing.
 
-**It opens on a 6-month view, scrolled to today** — that's the window
-planning conversations usually look at, so there's nothing to set up first.
-**Month / Quarter / 6 Months / Year** zoom buttons switch how much time is
-visible at once (the active one is highlighted); **Jump to Today** re-centres
-without changing zoom.
+**Agenda is the default, and it's the one built for reading.** It's a
+plain chronological list, grouped by month: every deal gets its own
+full-width row regardless of how short its date range is, so the SKU,
+deal type, **Price** and **Notes** ("Buy one Larry, get one free" and the
+like) are always completely legible, with the start–end dates spelled out
+in plain text on the right. Click any row to open that deal. This is the
+view for "what's on, what does it say, when does it run" — the timeline's
+pixel-width bars are great for visual date planning but were never going
+to comfortably fit a full sentence into a one-week promo, so Agenda
+doesn't try.
+
+**Timeline is for visual date planning.** Same Gantt-style layout as
+before — a frozen Banner/SKU rail next to a scrollable date grid, drag a
+bar to shift its dates, drag its edges to resize, double-click empty
+space on a row to add a deal. It opens on a 6-month view, scrolled to
+today — that's the window planning conversations usually look at.
+**Month / Quarter / 6 Months / Year** zoom buttons switch how much time
+is visible at once; **Jump to Today** re-centres without changing zoom.
 
 **Linked deals get their own row per deal type.** Instead of packing
 Everyday, Promo 1, Promo 2 etc. into shared, date-overlap lanes under one
-SKU row, each SKU now shows one line per deal type it's running (Everyday,
+SKU row, each SKU shows one line per deal type it's running (Everyday,
 Promo 1, Promo 2...), with the deal type name sitting on the frozen rail
 under the SKU name so it's always visible without opening a bar. Any
 manual (unlinked) deals for that SKU still share a single "Manual entries"
-row, same as before.
+row.
 
 **Each bar is still two lines** — line one is status + Shelf RRP (or promo
 name + price for manual entries, since several of those can share one
-row); line two is whatever's in that deal's **Notes** field, so context
-still travels with the bar itself. **Short promos no longer lose that
-text.** At a wide zoom like 6 Months, a one- or two-week promo can be just
-a handful of pixels wide — too narrow for any text at all. Rather than
-clip the label down to illegibility, the label now spills into whatever
-empty space follows in the same row, up to wherever the next deal for
-that deal type starts (or the edge of the timeline) — same idea as a
-label spilling out beside a short bar in a Gantt chart. The colored bar
-still marks the true dates; only the text is free to extend past it, so
-you can read what a short promo is without having to switch to Month zoom
-or open it. The **Table view** carries a **Notes** column too (truncated
-with the full text on hover).
+row); line two is whatever's in that deal's **Notes** field. **Short
+promos don't lose that text.** At a wide zoom like 6 Months, a one- or
+two-week promo can be just a handful of pixels wide — too narrow for any
+text at all. Rather than clip the label down to illegibility, it spills
+into whatever empty space follows in the same row, up to wherever the
+next deal for that deal type starts (or the edge of the timeline) — same
+idea as a label spilling out beside a short bar in a Gantt chart. The
+colored bar still marks the true dates; only the text extends past it.
+That said, if you mainly need to read what's running rather than drag
+dates around, Agenda will usually be the faster read — Timeline is there
+for when the visual date layout itself is what you need.
+
+**Table is for spreadsheet-style sorting.** Click any column header to
+sort by it — Banner, SKU, Promo, Start/End dates, Target %, Actual %, or
+Status. It carries a **Notes** column too (truncated with the full text
+on hover).
 
 **Every deal you add here can be live-linked to a price point.** When
 adding or editing a deal, tick "Link to this SKU's pricing sheet" (on by

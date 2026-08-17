@@ -1574,7 +1574,11 @@ const App = (function () {
     // Defaults to the 6-month zoom, scrolled to today — that's the window
     // most planning conversations actually look at, so it opens on the
     // right view instead of a full year or a single month.
-    const calState = { view: "timeline", zoom: "half", filters: { bannerId: "all", skuId: "all", status: "all", search: "" }, sort: { key: "startDate", dir: 1 } };
+    // Defaults to Agenda — a plain chronological list is what the team
+    // actually reads day to day ("what's on, what's the price, what does
+    // the deal say, when does it run"). Timeline and Table are still there
+    // for visual date-planning and spreadsheet-style sorting.
+    const calState = { view: "agenda", zoom: "half", filters: { bannerId: "all", skuId: "all", status: "all", search: "" }, sort: { key: "startDate", dir: 1 } };
     const CAL_PX = { month: 26, quarter: 9, half: 5, year: 3.2 };
     let rangeStart, rangeEnd, totalDays, pxPerDay;
 
@@ -1598,10 +1602,11 @@ const App = (function () {
       <div class="page-header">
         <h1>Promo Calendar</h1>
       </div>
-      <p class="muted small">Linked deals stay live — their promo name, target margin and actual margin always reflect whatever's currently set on the banner's pricing card, so a price change shows up here automatically. Manage banners, SKUs and pricing from their own pages; this view just visualises what's already there. Drag a bar to shift its dates, drag its edges to resize, double-click empty space on a row to add a deal.</p>
+      <p class="muted small">Linked deals stay live — their promo name, target margin and actual margin always reflect whatever's currently set on the banner's pricing card, so a price change shows up here automatically. Manage banners, SKUs and pricing from their own pages; this view just visualises what's already there. <strong>Agenda</strong> is a plain reading list — click any deal to open it. <strong>Timeline</strong> is for visual date planning: drag a bar to shift its dates, drag its edges to resize, double-click empty space on a row to add a deal. <strong>Table</strong> is for spreadsheet-style sorting.</p>
       <div class="cal-toolbar-row">
         <div class="cal-view-toggle">
-          <button id="cal-view-timeline" class="btn-sm active">Timeline</button>
+          <button id="cal-view-agenda" class="btn-sm active">Agenda</button>
+          <button id="cal-view-timeline" class="btn-sm">Timeline</button>
           <button id="cal-view-table" class="btn-sm">Table</button>
         </div>
         <button class="btn-primary btn-sm" id="cal-add-deal">+ Add deal</button>
@@ -1627,7 +1632,10 @@ const App = (function () {
           <span><span class="cal-dot" style="background:var(--accent-warm)"></span>Pending / no price set</span>
         </div>
       </div>
-      <div id="cal-timeline-view">
+      <div id="cal-agenda-view">
+        <div id="cal-agenda-list"></div>
+      </div>
+      <div id="cal-timeline-view" style="display:none;">
         <div class="cal-gantt-wrap">
           <div class="cal-gantt-nav">
             <button class="btn-xs cal-zoom-btn" id="cal-zoom-month" data-zoom="month">Month</button>
@@ -1666,7 +1674,62 @@ const App = (function () {
 
     function calRenderAll() {
       if (calState.view === "timeline") calRenderTimeline();
-      else calRenderTable();
+      else if (calState.view === "table") calRenderTable();
+      else calRenderAgenda();
+    }
+
+    // ---------------- Agenda ----------------
+    // A plain, chronological reading view — every deal gets full-width
+    // space regardless of how short its date range is, so Price, Notes and
+    // the start/end dates are always completely legible. This is the view
+    // for "what's on and what does it say", as opposed to Timeline (visual
+    // date planning) or Table (spreadsheet-style sorting).
+    function calFmtDateShort(d) {
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    }
+    function calRenderAgenda() {
+      const rows = calFilteredDeals()
+        .slice()
+        .map((d) => ({ d, disp: calDealDisplay(d) }))
+        .sort((a, b) => (a.d.startDate < b.d.startDate ? -1 : a.d.startDate > b.d.startDate ? 1 : 0));
+      const list = document.getElementById("cal-agenda-list");
+      if (rows.length === 0) {
+        list.innerHTML = '<p class="muted" style="padding:24px;text-align:center;">No deals match the current filters.</p>';
+        return;
+      }
+      let html = "";
+      let currentMonth = null;
+      rows.forEach(({ d, disp }) => {
+        const s = calParseDate(d.startDate);
+        const sane = calIsSaneDate(s);
+        const monthLabel = sane ? s.toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "Undated";
+        if (monthLabel !== currentMonth) {
+          html += `<div class="cal-agenda-month">${esc(monthLabel)}</div>`;
+          currentMonth = monthLabel;
+        }
+        const banner = bannerById(d.bannerId),
+          sku = skuById(d.skuId);
+        const mStatus = calMarginStatus(disp);
+        const dateRange = sane ? `${calFmtDateShort(s)} – ${calFmtDateShort(calParseDate(d.endDate))}` : "No dates set";
+        html += `<div class="cal-agenda-row" data-deal="${d.id}" style="border-left-color:${calMarginColor(mStatus)};">
+          <div class="cal-agenda-main">
+            <div class="cal-agenda-title">
+              ${banner ? badgeHTML(banner, "sm") : ""}
+              <span class="cal-agenda-sku">${esc(sku ? sku.name : "?")}</span>
+              <span class="cal-agenda-dealtype">${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</span>
+            </div>
+            ${d.notes ? `<div class="cal-agenda-notes">${esc(d.notes)}</div>` : '<div class="cal-agenda-notes muted">No notes</div>'}
+          </div>
+          <div class="cal-agenda-side">
+            <div class="cal-agenda-price">${disp.shelfRRP != null ? fmt$(disp.shelfRRP) : '<span class="muted">No price set</span>'}</div>
+            <div class="cal-agenda-dates">${dateRange}</div>
+          </div>
+        </div>`;
+      });
+      list.innerHTML = html;
+      list.querySelectorAll(".cal-agenda-row").forEach((row) => {
+        row.addEventListener("click", () => calOpenDealModal(State.calendarDeals.find((d) => d.id === row.dataset.deal)));
+      });
     }
 
     // ---------------- Timeline ----------------
@@ -2332,22 +2395,23 @@ const App = (function () {
     }
 
     // ---------------- Wiring ----------------
-    document.getElementById("cal-view-timeline").addEventListener("click", () => {
-      calState.view = "timeline";
-      document.getElementById("cal-view-timeline").classList.add("active");
-      document.getElementById("cal-view-table").classList.remove("active");
-      document.getElementById("cal-timeline-view").style.display = "";
-      document.getElementById("cal-table-view").style.display = "none";
+    function calSetView(view) {
+      calState.view = view;
+      document.getElementById("cal-view-agenda").classList.toggle("active", view === "agenda");
+      document.getElementById("cal-view-timeline").classList.toggle("active", view === "timeline");
+      document.getElementById("cal-view-table").classList.toggle("active", view === "table");
+      document.getElementById("cal-agenda-view").style.display = view === "agenda" ? "" : "none";
+      document.getElementById("cal-timeline-view").style.display = view === "timeline" ? "" : "none";
+      document.getElementById("cal-table-view").style.display = view === "table" ? "" : "none";
       calRenderAll();
-    });
-    document.getElementById("cal-view-table").addEventListener("click", () => {
-      calState.view = "table";
-      document.getElementById("cal-view-table").classList.add("active");
-      document.getElementById("cal-view-timeline").classList.remove("active");
-      document.getElementById("cal-timeline-view").style.display = "none";
-      document.getElementById("cal-table-view").style.display = "";
-      calRenderAll();
-    });
+      // The Gantt only computes its date range/scroll math when it
+      // actually renders, so line it up on today the first time someone
+      // switches into it (matches the "6 Months" zoom default).
+      if (view === "timeline") calScrollToToday(40);
+    }
+    document.getElementById("cal-view-agenda").addEventListener("click", () => calSetView("agenda"));
+    document.getElementById("cal-view-timeline").addEventListener("click", () => calSetView("timeline"));
+    document.getElementById("cal-view-table").addEventListener("click", () => calSetView("table"));
     document.getElementById("cal-add-deal").addEventListener("click", () => calOpenDealModal(null));
     document.getElementById("cal-filter-banner").addEventListener("change", (e) => {
       calState.filters.bannerId = e.target.value;
@@ -2411,10 +2475,6 @@ const App = (function () {
     });
 
     calRenderAll();
-    setTimeout(() => {
-      const btn = document.getElementById("cal-scroll-today");
-      if (btn) btn.click();
-    }, 50);
   });
 
   // ------------------------------------------------------------ Data / Settings

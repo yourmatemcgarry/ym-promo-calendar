@@ -288,6 +288,24 @@ textarea { min-height: 60px; resize: vertical; }
 .cal-view-toggle button.active { background: var(--accent); color: #fff; }
 .cal-gantt-nav .cal-zoom-btn.active { background: var(--accent); color: #fff; border-color: var(--accent-dark); }
 
+/* Agenda: a plain chronological list, grouped by month. Every row is
+   full-width regardless of how short the promo's date range is, so
+   Price, Notes and the date range are always completely legible — this
+   is the "what's on" reading view, as opposed to Timeline (visual date
+   planning) or Table (spreadsheet-style sorting). */
+.cal-agenda-month { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin: 18px 2px 8px; }
+.cal-agenda-month:first-child { margin-top: 2px; }
+.cal-agenda-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--card-bg); border: 1px solid var(--border); border-left: 4px solid var(--muted); border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; cursor: pointer; }
+.cal-agenda-row:hover { border-color: var(--accent); }
+.cal-agenda-main { min-width: 0; flex: 1; }
+.cal-agenda-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cal-agenda-sku { font-weight: 700; font-size: 14px; }
+.cal-agenda-dealtype { font-size: 12.5px; color: var(--muted); }
+.cal-agenda-notes { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.cal-agenda-side { flex: none; text-align: right; }
+.cal-agenda-price { font-weight: 700; font-size: 16px; }
+.cal-agenda-dates { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
+
 .cal-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 10px; }
 .cal-filters label { display: inline; font-size: 12px; margin: 0 4px 0 0; }
 .cal-filters > div { display: flex; align-items: center; gap: 6px; }
