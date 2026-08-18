@@ -1,0 +1,9 @@
+{
+  "name": "ymt-pricing-crm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Your Mates Brewing customer pricing CRM — static site + Netlify Function backed by Netlify Blobs.",
+  "dependencies": {
+    "@netlify/blobs": "^8.0.0"
+  }
+}
