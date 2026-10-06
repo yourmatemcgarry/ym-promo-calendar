@@ -210,6 +210,8 @@ const App = (function () {
     const [base, ...rest] = hash.split("/");
     const fn = routes[base] || routes["dashboard"];
     document.querySelectorAll(".nav-link").forEach((a) => a.classList.toggle("active", a.dataset.route === base));
+    const activeBanner = base === "banner" ? (State.banners.find((b) => b.id === (rest[1] || rest[0])) || (State.banners.find((b) => b.groupId === rest[0]) || {})).id : null;
+    document.querySelectorAll(".banner-tab").forEach((a) => a.classList.toggle("active", a.dataset.banner === activeBanner));
     const main = document.getElementById("main");
     main.innerHTML = '<div class="loading">Loading…</div>';
     try {
@@ -636,39 +638,41 @@ const App = (function () {
 
   // ------------------------------------------------------------ Banner page
   route("banner", async (rest, main) => {
-    const groupId = rest[0];
-    const group = State.bannerGroups.find((g) => g.id === groupId);
-    if (!group) {
-      main.innerHTML = `<div class="card">Unknown banner group.</div>`;
+    // One tab per banner: #/banner/<bannerId>. Older links of the form
+    // #/banner/<groupId>[/<bannerId>] still resolve.
+    let banner = State.banners.find((b) => b.id === (rest[1] || rest[0]));
+    if (!banner) {
+      const g = State.bannerGroups.find((x) => x.id === rest[0]);
+      banner = g ? State.banners.find((b) => b.groupId === g.id) : State.banners[0];
+    }
+    if (!banner) {
+      main.innerHTML = `<div class="card">Unknown banner.</div>`;
       return;
     }
-    const groupBanners = State.banners.filter((b) => b.groupId === groupId);
-    const selectedBannerId = rest[1] || groupBanners[0].id;
-    const banner = groupBanners.find((b) => b.id === selectedBannerId) || groupBanners[0];
     const period = State.viewPeriod;
     const terms = latestBannerTerms(banner.id, period);
 
-    const bannerTabs = groupBanners.map((b) => `<a class="tab ${b.id === banner.id ? "active" : ""}" href="#/banner/${groupId}/${b.id}">${badgeHTML(b, "sm")}${esc(b.name)}</a>`).join("");
-
-    const skuRows = State.skus.map((sku) => ({ sku, pricing: latestPricing(sku.id, banner.id, period) })).filter((r) => r.pricing);
-    const skusWithoutPricing = State.skus.filter((s) => !skuRows.find((r) => r.sku.id === s.id));
+    const allPriced = State.skus.map((sku) => ({ sku, pricing: latestPricing(sku.id, banner.id, period) })).filter((r) => r.pricing);
+    const skuRows = allPriced.filter((r) => isSkuRanged(banner, r.sku.id));
+    const skusWithoutPricing = State.skus.filter((s) => !allPriced.find((r) => r.sku.id === s.id));
+    const rangingChips = State.skus
+      .map((s) => `<button class="rng-chip ${isSkuRanged(banner, s.id) ? "on" : ""}" data-sku="${s.id}" title="Click to ${isSkuRanged(banner, s.id) ? "remove from" : "add to"} this banner's range">${isSkuRanged(banner, s.id) ? "✓" : "+"} ${esc(s.name)} <span class="muted small">${esc(s.packFormat || "")}</span></button>`)
+      .join("");
 
     main.innerHTML = `
       <div class="page-header">
-        <h1>${badgeHTML(group, "lg")}${esc(group.shortName)}</h1>
+        <h1>${badgeHTML(banner, "lg")}${esc(banner.name)}</h1>
         <div class="period-control">Viewing: ${periodSelectorHTML(period)}</div>
       </div>
-      <div class="tabs">${bannerTabs}</div>
 
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-header-row"><h3>Banner terms <span class="muted small">(all % based)</span></h3><button class="btn-sm" id="edit-terms">Edit / new period</button></div>
-          ${renderTermsSummary(terms)}
-        </div>
-        <div class="card">
-          <div class="card-header-row"><h3>Target margins</h3><button class="btn-sm" id="manage-deal-types">Manage deal types</button></div>
-          ${renderTargetMargins(terms, banner)}
-        </div>
+      <div class="card">
+        <div class="card-header-row"><h3>Ranging <span class="muted small">— switch SKUs on or off for ${esc(banner.name)}</span></h3></div>
+        <div class="rng-chips">${rangingChips}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header-row"><h3>Promo timeline</h3></div>
+        <div id="promo-planner"></div>
       </div>
 
       <div class="page-header">
@@ -685,12 +689,35 @@ const App = (function () {
       </div>
       <p class="muted small">Shelf RRP and Scan Deal are live — edit them to see the margin/GP impact instantly. Click "Save card" to record the change as a new version for the period selected above.</p>
       <div id="sku-cards">
-        ${skuRows.map(({ sku, pricing }) => skuCardHTML(sku, banner, pricing, period)).join("") || '<p class="muted">No SKUs priced for this banner yet. Use the dropdown above to add one.</p>'}
+        ${skuRows.map(({ sku, pricing }) => skuCardHTML(sku, banner, pricing, period)).join("") || '<p class="muted">No ranged SKUs are priced for this banner yet. Switch SKUs on above, or use the dropdown to add one.</p>'}
+      </div>
+
+      <div class="grid-2" style="margin-top:20px;">
+        <div class="card">
+          <div class="card-header-row"><h3>Banner terms <span class="muted small">(all % based)</span></h3><button class="btn-sm" id="edit-terms">Edit / new period</button></div>
+          ${renderTermsSummary(terms)}
+        </div>
+        <div class="card">
+          <div class="card-header-row"><h3>Target margins</h3><button class="btn-sm" id="manage-deal-types">Manage deal types</button></div>
+          ${renderTargetMargins(terms, banner)}
+        </div>
       </div>
       <div id="modal-root"></div>
     `;
 
     attachPeriodSelector(main);
+    main.querySelectorAll(".rng-chip").forEach((chip) =>
+      chip.addEventListener("click", async () => {
+        const id = chip.dataset.sku;
+        const un = (banner.unrangedSkuIds || []).slice();
+        const i = un.indexOf(id);
+        if (i === -1) un.push(id);
+        else un.splice(i, 1);
+        banner.unrangedSkuIds = un;
+        await DB.put("banners", banner);
+        onHashChange();
+      })
+    );
     document.getElementById("edit-terms").addEventListener("click", () => openEditTermsModal(banner));
     document.getElementById("manage-deal-types").addEventListener("click", () => openDealTypesModal(banner));
     document.getElementById("add-sku-select").addEventListener("change", (e) => {
@@ -699,6 +726,7 @@ const App = (function () {
       e.target.value = "";
     });
     skuRows.forEach(({ sku, pricing }) => wireSkuCard(sku, banner, pricing, period));
+    await renderPromoPlanner(banner, document.getElementById("promo-planner"));
   });
 
   // ---- Per-SKU vertical card: list price, distributor fee $ impact, deals table (live) ----
@@ -1554,6 +1582,7 @@ const App = (function () {
       linked: true,
       listPrice: pr.listPrice,
       shelfRRP: dealRow.shelfRRP,
+      scanDeal: dealRow.scanDeal || 0,
       ymNetDeal: m.ymNetDeal,
       profit: m.profit,
       gpPct: m.gpPct,
@@ -1570,93 +1599,71 @@ const App = (function () {
     return { planned: "PLN", confirmed: "CFM", live: "LIVE", complete: "DONE" }[s] || s;
   }
 
-  route("calendar", async (rest, main) => {
-    // Defaults to the 6-month zoom, scrolled to today — that's the window
-    // most planning conversations actually look at, so it opens on the
-    // right view instead of a full year or a single month.
-    // Defaults to Agenda — a plain chronological list is what the team
-    // actually reads day to day ("what's on, what's the price, what does
-    // the deal say, when does it run"). Timeline and Table are still there
-    // for visual date-planning and spreadsheet-style sorting.
-    const calState = { view: "agenda", zoom: "half", filters: { bannerId: "all", skuId: "all", status: "all", search: "" }, sort: { key: "startDate", dir: 1 } };
-    const CAL_PX = { month: 26, quarter: 9, half: 5, year: 3.2 };
-    let rangeStart, rangeEnd, totalDays, pxPerDay;
+  // ------------------------------------------------------------ Per-banner promo planner
+  // Every banner tab embeds its own planner: a period grid (SKU rows x promo
+  // period columns, same layout as the retailer slotting sheets) plus a Table
+  // view. Nothing here is shared across banners.
+  function isSkuRanged(banner, skuId) {
+    return (banner.unrangedSkuIds || []).indexOf(skuId) === -1;
+  }
+
+  async function renderPromoPlanner(banner, host) {
+    const calState = { view: "grid", range: "upcoming", filters: { skuId: "all", status: "all", search: "" }, sort: { key: "startDate", dir: 1 } };
+    const rangedSkus = calOrderedSkus().filter((s) => isSkuRanged(banner, s.id));
 
     function calFilteredDeals() {
       return State.calendarDeals.filter((d) => {
-        if (calState.filters.bannerId !== "all" && d.bannerId !== calState.filters.bannerId) return false;
+        if (d.bannerId !== banner.id) return false;
+        if (!isSkuRanged(banner, d.skuId)) return false;
         if (calState.filters.skuId !== "all" && d.skuId !== calState.filters.skuId) return false;
         if (calState.filters.status !== "all" && d.status !== calState.filters.status) return false;
         if (calState.filters.search) {
           const disp = calDealDisplay(d);
           const sku = skuById(d.skuId);
           const q = calState.filters.search.toLowerCase();
-          const hay = ((sku ? sku.name : "") + " " + disp.promoName + " " + (d.cycleInstance || "")).toLowerCase();
+          const hay = ((sku ? sku.name : "") + " " + disp.promoName + " " + (d.cycleInstance || "") + " " + (d.notes || "")).toLowerCase();
           if (hay.indexOf(q) === -1) return false;
         }
         return true;
       });
     }
 
-    main.innerHTML = `
-      <div class="page-header">
-        <h1>Promo Calendar</h1>
-      </div>
-      <p class="muted small">Linked deals stay live — their promo name, target margin and actual margin always reflect whatever's currently set on the banner's pricing card, so a price change shows up here automatically. Manage banners, SKUs and pricing from their own pages; this view just visualises what's already there. <strong>Agenda</strong> is a plain reading list — click any deal to open it. <strong>Timeline</strong> is for visual date planning: drag a bar to shift its dates, drag its edges to resize, double-click empty space on a row to add a deal. <strong>Table</strong> is for spreadsheet-style sorting.</p>
+    host.innerHTML = `
       <div class="cal-toolbar-row">
         <div class="cal-view-toggle">
-          <button id="cal-view-agenda" class="btn-sm active">Agenda</button>
-          <button id="cal-view-timeline" class="btn-sm">Timeline</button>
+          <button id="cal-view-grid" class="btn-sm active">Timeline</button>
           <button id="cal-view-table" class="btn-sm">Table</button>
         </div>
-        <button class="btn-primary btn-sm" id="cal-add-deal">+ Add deal</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="pg-range" class="select" style="width:auto;">
+            <option value="upcoming">Next 6 months</option>
+            <option value="past">Past</option>
+            <option value="all">All dates</option>
+          </select>
+          <button class="btn-primary btn-sm" id="cal-add-deal">+ Add deal</button>
+        </div>
       </div>
       <div class="cal-filters">
-        <div><label>Banner</label><select id="cal-filter-banner" class="select"><option value="all">All banners</option>${calOrderedBanners()
-          .map((b) => `<option value="${b.id}">${esc(b.name)}</option>`)
-          .join("")}</select></div>
-        <div><label>SKU</label><select id="cal-filter-sku" class="select"><option value="all">All SKUs</option>${calOrderedSkus()
-          .map((s) => `<option value="${s.id}">${esc(s.name)} — ${esc(s.packFormat || "")}</option>`)
-          .join("")}</select></div>
+        <div><label>SKU</label><select id="cal-filter-sku" class="select"><option value="all">All SKUs</option>${rangedSkus.map((s) => `<option value="${s.id}">${esc(s.name)} — ${esc(s.packFormat || "")}</option>`).join("")}</select></div>
         <div><label>Status</label><select id="cal-filter-status" class="select">
-          <option value="all">All statuses</option>
-          <option value="planned">Planned</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="live">Live</option>
-          <option value="complete">Complete</option>
+          <option value="all">All statuses</option><option value="planned">Planned</option><option value="confirmed">Confirmed</option><option value="live">Live</option><option value="complete">Complete</option>
         </select></div>
-        <div><label>Search</label><input type="text" id="cal-filter-search" placeholder="SKU or promo name"></div>
+        <div><label>Search</label><input type="text" id="cal-filter-search" placeholder="SKU, promo or note"></div>
         <div class="cal-legend">
-          <span><span class="cal-dot" style="background:var(--pos)"></span>Meeting/above target</span>
+          <span><span class="cal-dot" style="background:var(--pos)"></span>Meeting target</span>
           <span><span class="cal-dot" style="background:var(--neg)"></span>Below target</span>
-          <span><span class="cal-dot" style="background:var(--accent-warm)"></span>Pending / no price set</span>
+          <span><span class="cal-dot" style="background:var(--accent-warm)"></span>Not priced yet</span>
         </div>
       </div>
-      <div id="cal-agenda-view">
-        <div id="cal-agenda-list"></div>
-      </div>
-      <div id="cal-timeline-view" style="display:none;">
-        <div class="cal-gantt-wrap">
-          <div class="cal-gantt-nav">
-            <button class="btn-xs cal-zoom-btn" id="cal-zoom-month" data-zoom="month">Month</button>
-            <button class="btn-xs cal-zoom-btn" id="cal-zoom-quarter" data-zoom="quarter">Quarter</button>
-            <button class="btn-xs cal-zoom-btn" id="cal-zoom-half" data-zoom="half">6 Months</button>
-            <button class="btn-xs cal-zoom-btn" id="cal-zoom-year" data-zoom="year">Year</button>
-            <button class="btn-xs" id="cal-scroll-today">Jump to Today</button>
-            <span class="muted small" id="cal-range-label" style="margin-left:auto;"></span>
-          </div>
-          <div class="cal-gantt-body">
-            <div class="cal-gantt-frozen">
-              <div class="cal-frozen-header"><div class="cal-fh-rail">Banner</div><div class="cal-fh-label">SKU</div></div>
-              <div class="cal-frozen-viewport" id="cal-frozen-viewport">
-                <div class="cal-frozen-inner" id="cal-frozen-inner"></div>
-              </div>
-            </div>
-            <div class="cal-gantt-scroll" id="cal-gantt-scroll">
-              <div class="cal-gantt-grid" id="cal-gantt-grid"></div>
-            </div>
-          </div>
+      <div id="pg-grid-view">
+        <div class="pg-legend">
+          <span><i class="pg-swatch pg-mpk"></i>Multipack</span>
+          <span><i class="pg-swatch pg-car"></i>Carton</span>
+          <span><i class="pg-swatch pg-oth"></i>Other mechanic</span>
+          <span><i class="pg-swatch pg-flagsw"></i>Catalogue / off-location</span>
+          <span class="muted small">Promo price shown; scan deal beneath. Click a cell to open it, click a blank cell to add a deal.</span>
         </div>
+        <div id="pg-grid-wrap" class="pg-wrap"></div>
       </div>
       <div id="cal-table-view" style="display:none;">
         <div class="table-scroll"><table class="table">
@@ -1669,461 +1676,148 @@ const App = (function () {
           <tbody id="cal-table-body"></tbody>
         </table></div>
       </div>
-      <div id="modal-root"></div>
     `;
 
     function calRenderAll() {
-      if (calState.view === "timeline") calRenderTimeline();
-      else if (calState.view === "table") calRenderTable();
-      else calRenderAgenda();
+      if (calState.view === "grid") calRenderGrid();
+      else calRenderTable();
     }
 
-    // ---------------- Agenda ----------------
-    // A plain, chronological reading view — every deal gets full-width
-    // space regardless of how short its date range is, so Price, Notes and
-    // the start/end dates are always completely legible. This is the view
-    // for "what's on and what does it say", as opposed to Timeline (visual
-    // date planning) or Table (spreadsheet-style sorting).
-    function calFmtDateShort(d) {
-      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    // ---------------- Period grid ----------------
+    function pgMoney(re, text) {
+      const m = re.exec(text || "");
+      return m ? parseFloat(m[1]) : null;
     }
-    function calRenderAgenda() {
-      const rows = calFilteredDeals()
-        .slice()
-        .map((d) => ({ d, disp: calDealDisplay(d) }))
-        .sort((a, b) => (a.d.startDate < b.d.startDate ? -1 : a.d.startDate > b.d.startDate ? 1 : 0));
-      const list = document.getElementById("cal-agenda-list");
-      if (rows.length === 0) {
-        list.innerHTML = '<p class="muted" style="padding:24px;text-align:center;">No deals match the current filters.</p>';
-        return;
+    function pgDeal(d) {
+      const disp = calDealDisplay(d);
+      const dt = d.linked ? (banner.dealTypes || []).find((x) => x.id === d.dealTypeId) : null;
+      const hint = (dt && dt.packType) || d.packHint || "";
+      const name = disp.promoName || "";
+      const notes = d.notes || "";
+      let kind = "oth",
+        tag = "";
+      const uom = /UOM:\s*(\w+)/i.exec(notes);
+      const t1 = hint + " " + (uom ? uom[1] : "");
+      if (/multipack|mpk|pack/i.test(t1)) {
+        kind = "mpk";
+        tag = "MPK";
+      } else if (/carton|ctn/i.test(t1)) {
+        kind = "car";
+        tag = "CAR";
+      } else if (/2for/i.test(t1) || /\d\s*for\s*\$/i.test(name)) {
+        tag = "2 FOR";
+      } else if (/carton|ctn/i.test(name)) {
+        kind = "car";
+        tag = "CAR";
+      } else if (/\d\s*-?\s*pack|\dpk|mpk/i.test(name)) {
+        kind = "mpk";
+        tag = "MPK";
       }
-      let html = "";
-      let currentMonth = null;
-      rows.forEach(({ d, disp }) => {
-        const s = calParseDate(d.startDate);
-        const sane = calIsSaneDate(s);
-        const monthLabel = sane ? s.toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "Undated";
-        if (monthLabel !== currentMonth) {
-          html += `<div class="cal-agenda-month">${esc(monthLabel)}</div>`;
-          currentMonth = monthLabel;
+      let price = null,
+        priceFromName = false;
+      if (d.linked) price = disp.shelfRRP != null ? disp.shelfRRP : null;
+      else {
+        price = pgMoney(/Promo price:\s*\$([\d.]+)/i, notes);
+        if (price == null && !/\d\s*for\s*\$/i.test(name)) {
+          price = pgMoney(/\$([\d.]+)/, name);
+          priceFromName = price != null;
         }
-        const banner = bannerById(d.bannerId),
-          sku = skuById(d.skuId);
-        const mStatus = calMarginStatus(disp);
-        const dateRange = sane ? `${calFmtDateShort(s)} – ${calFmtDateShort(calParseDate(d.endDate))}` : "No dates set";
-        html += `<div class="cal-agenda-row" data-deal="${d.id}" style="border-left-color:${calMarginColor(mStatus)};">
-          <div class="cal-agenda-main">
-            <div class="cal-agenda-title">
-              ${banner ? badgeHTML(banner, "sm") : ""}
-              <span class="cal-agenda-sku">${esc(sku ? sku.name : "?")}</span>
-              <span class="cal-agenda-dealtype">${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</span>
-            </div>
-            ${d.notes ? `<div class="cal-agenda-notes">${esc(d.notes)}</div>` : '<div class="cal-agenda-notes muted">No notes</div>'}
-          </div>
-          <div class="cal-agenda-side">
-            <div class="cal-agenda-price">${disp.shelfRRP != null ? fmt$(disp.shelfRRP) : '<span class="muted">No price set</span>'}</div>
-            <div class="cal-agenda-dates">${dateRange}</div>
-          </div>
-        </div>`;
-      });
-      list.innerHTML = html;
-      list.querySelectorAll(".cal-agenda-row").forEach((row) => {
-        row.addEventListener("click", () => calOpenDealModal(State.calendarDeals.find((d) => d.id === row.dataset.deal)));
-      });
+      }
+      let scan = d.linked ? disp.scanDeal : pgMoney(/Promo scan deal:\s*\$([\d.]+)/i, notes);
+      if (scan == null && !d.linked) scan = pgMoney(/scan[^$|]*\$([\d.]+)/i, notes);
+      const flagText = /catalog/i.test(name + " " + notes) ? "Catalogue" : /off[\s-]?location/i.test(name + " " + notes) ? "Off location" : "";
+      const noteShow = notes && notes.length <= 70 && !/^UOM:|^Placeholder from/i.test(notes) ? notes : "";
+      return { d, disp, kind, tag, price, priceFromName, scan, flagText, noteShow, name };
     }
-
-    // ---------------- Timeline ----------------
-    const CAL_EMPTY_ROW_H = 40;
-    const CAL_LANE_H = 58; // per-lane height — price line + up to 2 wrapped lines of notes
-
-    function calComputeRange() {
-      const y = new Date().getFullYear();
-      let minD = new Date(y, 0, 1),
-        maxD = new Date(y, 11, 31);
-      State.calendarDeals.forEach((d) => {
+    function pgColumns(deals) {
+      const cols = [];
+      deals
+        .slice()
+        .sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : a.endDate < b.endDate ? -1 : 1))
+        .forEach((d) => {
+          const s = calParseDate(d.startDate),
+            e = calParseDate(d.endDate);
+          if (!calIsSaneDate(s) || !calIsSaneDate(e)) return;
+          let col = cols.find((c) => Math.abs(calDiffDays(c.start, s)) <= 3 && Math.abs(calDiffDays(c.end, e)) <= 3);
+          if (!col) {
+            col = { start: s, end: e, deals: [] };
+            cols.push(col);
+          }
+          col.deals.push(d);
+        });
+      return cols.sort((a, b) => a.start - b.start);
+    }
+    function pgRangeLabel(s, e) {
+      const sm = s.toLocaleDateString(undefined, { month: "short" }),
+        em = e.toLocaleDateString(undefined, { month: "short" });
+      return sm === em && s.getFullYear() === e.getFullYear() ? `${s.getDate()}–${e.getDate()} ${sm}` : `${s.getDate()} ${sm}–${e.getDate()} ${em}`;
+    }
+    function calRenderGrid() {
+      const wrap = document.getElementById("pg-grid-wrap");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      let deals = calFilteredDeals().filter((d) => {
         const s = calParseDate(d.startDate),
           e = calParseDate(d.endDate);
-        if (!calIsSaneDate(s) || !calIsSaneDate(e)) return;
-        if (s < minD) minD = s;
-        if (e > maxD) maxD = e;
+        if (!calIsSaneDate(s) || !calIsSaneDate(e)) return false;
+        if (calState.range === "upcoming") return e >= calAddDays(today, -7) && s <= calAddDays(today, 190);
+        if (calState.range === "past") return e < today;
+        return true;
       });
-      rangeStart = calAddDays(minD, -14);
-      rangeEnd = calAddDays(maxD, 14);
-      totalDays = calDiffDays(rangeStart, rangeEnd);
-      pxPerDay = CAL_PX[calState.zoom];
-    }
-
-    function calPackLanes(deals) {
-      const sorted = deals.slice().sort((a, b) => calParseDate(a.startDate) - calParseDate(b.startDate));
-      const lanes = [];
-      sorted.forEach((d) => {
-        const s = calParseDate(d.startDate);
-        let placed = false;
-        for (let i = 0; i < lanes.length; i++) {
-          const lastInLane = lanes[i][lanes[i].length - 1];
-          if (calParseDate(lastInLane.endDate) <= s) {
-            lanes[i].push(d);
-            placed = true;
-            break;
-          }
-        }
-        if (!placed) lanes.push([d]);
-      });
-      return lanes;
-    }
-
-    // Group a SKU's deals into one line per deal type (for linked deals,
-    // so "Everyday (Carton)" and "Promo 1 (Carton)" each get their own row
-    // instead of being packed into shared lanes purely by date) plus a
-    // single "Manual entries" line for anything not live-linked, since
-    // those don't have a deal type to key by.
-    function calSkuLineGroups(skuDeals, banner) {
-      const linkedByType = new Map();
-      const manual = [];
-      skuDeals.forEach((d) => {
-        if (d.linked && d.dealTypeId) {
-          if (!linkedByType.has(d.dealTypeId)) {
-            const dt = (banner.dealTypes || []).find((x) => x.id === d.dealTypeId);
-            linkedByType.set(d.dealTypeId, { label: dt ? dt.label : "(deal type removed)", deals: [] });
-          }
-          linkedByType.get(d.dealTypeId).deals.push(d);
-        } else {
-          manual.push(d);
-        }
-      });
-      const orderedTypeIds = (banner.dealTypes || []).map((dt) => dt.id).filter((id) => linkedByType.has(id));
-      linkedByType.forEach((_, id) => {
-        if (orderedTypeIds.indexOf(id) === -1) orderedTypeIds.push(id);
-      });
-      const groups = orderedTypeIds.map((id) => ({ label: linkedByType.get(id).label, deals: linkedByType.get(id).deals }));
-      if (manual.length) groups.push({ label: "Manual entries", deals: manual });
-      return groups;
-    }
-
-    function calAxisHtml() {
-      let out = "";
-      let cur = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-      while (cur <= rangeEnd) {
-        const offset = calDiffDays(rangeStart, cur) * pxPerDay;
-        const nextMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-        const label = cur.toLocaleDateString(undefined, { month: "short", year: cur.getMonth() === 0 ? "numeric" : undefined });
-        out += `<div class="cal-axis-month" style="left:${Math.max(offset, 0)}px;">${label}</div>`;
-        if (calState.zoom !== "year") {
-          let w = new Date(cur);
-          while (w < nextMonth && w <= rangeEnd) {
-            const wOffset = calDiffDays(rangeStart, w) * pxPerDay;
-            if (wOffset >= 0) out += `<div class="cal-axis-week" style="left:${wOffset}px;">${w.getDate()}</div>`;
-            w = calAddDays(w, 7);
-          }
-        }
-        cur = nextMonth;
-      }
-      return out;
-    }
-    function calGridLinesHtml() {
-      let out = "";
-      let cur = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
-      while (cur <= rangeEnd) {
-        const offset = calDiffDays(rangeStart, cur) * pxPerDay;
-        if (offset >= 0) out += `<div class="cal-month-line" style="left:${offset}px;"></div>`;
-        cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-      }
-      return out;
-    }
-    function calTodayLineHtml() {
-      const t = new Date();
-      t.setHours(0, 0, 0, 0);
-      if (t < rangeStart || t > rangeEnd) return "";
-      const offset = calDiffDays(rangeStart, t) * pxPerDay;
-      return `<div class="cal-today-line" style="left:${offset}px;" title="Today"></div>`;
-    }
-    function calBarHtml(d, sku, laneIdx, isManualGroup, availPx) {
-      const s = calParseDate(d.startDate),
-        e = calParseDate(d.endDate);
-      const left = calDiffDays(rangeStart, s) * pxPerDay;
-      const width = Math.max(calDiffDays(s, e) * pxPerDay, 10);
-      const top = laneIdx * CAL_LANE_H + 5;
-      const disp = calDealDisplay(d);
-      const mStatus = calMarginStatus(disp);
-      const bg = calSkuColor(sku.id) + "3d";
-      const priceText = disp.shelfRRP != null ? fmt$(disp.shelfRRP) : "";
-      // Deal type now has its own row on the frozen rail, so a linked deal's
-      // top line just needs status + Price. Manual/unlinked deals still
-      // share one row per SKU, so they keep their own name on the bar to
-      // stay distinguishable from each other. The second line surfaces the
-      // deal's Notes (if any), so context still travels with the bar itself
-      // — handy when screenshotting/exporting for someone else.
-      const label = isManualGroup ? `${esc(disp.promoName)}${disp.linked ? " 🔗" : ""} ${priceText}` : priceText;
-      // A short promo at a wide zoom can be just a handful of pixels wide —
-      // far too narrow to hold any text at all. Rather than clip the label
-      // to the bar's own true date-span width, let it spill into whatever
-      // empty space follows in the same lane (up to the next deal, or the
-      // edge of the timeline). The colored bar still marks the real dates;
-      // only the text extends past it, same idea as a Gantt chart label
-      // spilling out beside a short task. Always keep at least MIN_LABEL_PX
-      // even if that's more room than is actually free — for two promos
-      // back-to-back with no gap, a sliver of overlap into the next bar
-      // beats a label that's collapsed down to nothing.
-      const MIN_LABEL_PX = 70;
-      const labelWidth = Math.max(Math.min((availPx || width) - 10, 260), MIN_LABEL_PX);
-      return `<div class="cal-bar cal-status-${d.status}" data-deal="${d.id}" style="left:${left}px;width:${width}px;top:${top}px;background:${bg};border-left-color:${calMarginColor(mStatus)};">
-        <span class="cal-handle cal-handle-left" data-handle="left"></span>
-        <div class="cal-bar-text" style="width:${labelWidth}px;">
-          <div class="cal-bar-line1"><span class="cal-badge">${calStatusBadge(d.status)}</span>${label}</div>
-          <div class="cal-bar-line2">${d.notes ? esc(d.notes) : ""}</div>
-        </div>
-        <span class="cal-handle cal-handle-right" data-handle="right"></span>
-      </div>`;
-    }
-
-    function calRenderTimeline() {
-      calComputeRange();
-      const totalPx = Math.round(totalDays * pxPerDay);
-      const grid = document.getElementById("cal-gantt-grid");
-      const frozen = document.getElementById("cal-frozen-inner");
-      grid.style.gridTemplateColumns = totalPx + "px";
-
-      let trackHtml = `<div class="cal-axis-cell cal-track-cell" style="grid-row:1;width:${totalPx}px;">${calAxisHtml()}</div>`;
-      let frozenHtml = "";
-
-      const deals = calFilteredDeals();
-      const banners = calOrderedBanners().filter((b) => calState.filters.bannerId === "all" || calState.filters.bannerId === b.id);
-
-      if (banners.length === 0) {
-        grid.innerHTML = trackHtml + '<div style="padding:24px;color:var(--muted);">No banners match the current filter.</div>';
-        frozen.innerHTML = "";
-        frozen.style.transform = "translateY(0px)";
-        document.getElementById("cal-range-label").textContent = "";
+      const cols = pgColumns(deals);
+      if (cols.length === 0) {
+        wrap.innerHTML = '<p class="muted" style="padding:24px;text-align:center;">No promos in this window. Use "+ Add deal", or switch the date range.</p>';
         return;
       }
-
-      const MIN_BANNER_BLOCK_H = 150;
-      let rowIndex = 2;
-      banners.forEach((banner) => {
-        const bannerStartRow = rowIndex;
-        const bannerDeals = deals.filter((d) => d.bannerId === banner.id);
-        const rows = [];
-        if (bannerDeals.length === 0) {
-          rows.push({ type: "empty" });
-        } else {
-          const skuIds = [];
-          bannerDeals.forEach((d) => {
-            if (skuIds.indexOf(d.skuId) === -1) skuIds.push(d.skuId);
-          });
-          skuIds.sort((a, b) => {
-            const sa = skuById(a),
-              sb = skuById(b);
-            return (sa ? sa.name : "").localeCompare(sb ? sb.name : "");
-          });
-          skuIds.forEach((sid) => {
-            const sku = skuById(sid);
-            if (!sku) return;
-            const skuDeals = bannerDeals.filter((d) => d.skuId === sid);
-            // One row per deal type (linked deals grouped by dealTypeId, plus
-            // one shared "Manual entries" row) so deal types no longer need
-            // to be packed into shared, date-overlap lanes.
-            const groups = calSkuLineGroups(skuDeals, banner);
-            groups.forEach((group, gi) => {
-              const lanes = calPackLanes(group.deals);
-              const laneCount = Math.max(lanes.length, 1);
-              rows.push({
-                type: "sku",
-                height: Math.max(laneCount * CAL_LANE_H + 10, 64),
-                sku,
-                lanes,
-                groupLabel: group.label,
-                isHeader: gi === 0,
-                isManual: group.label === "Manual entries",
-              });
-            });
-          });
-        }
-        let totalH = rows.reduce((sum, r) => sum + (r.height || CAL_EMPTY_ROW_H), 0);
-        if (rows.length > 0 && totalH < MIN_BANNER_BLOCK_H) {
-          rows[rows.length - 1].height = (rows[rows.length - 1].height || CAL_EMPTY_ROW_H) + (MIN_BANNER_BLOCK_H - totalH);
-        }
-
-        rows.forEach((row, i) => {
-          const sCls = i === 0 ? " cal-chain-start" : "";
-          const h = row.height || CAL_EMPTY_ROW_H;
-          if (row.type === "empty") {
-            frozenHtml += `<div class="cal-empty-row${sCls}" style="grid-column:1/-1;grid-row:${rowIndex};height:${h}px;">No deals yet.<button class="btn-xs" data-cal-add-banner="${banner.id}">+ Add</button></div>`;
-            trackHtml += `<div class="cal-track-cell${sCls}" style="grid-row:${rowIndex};height:${h}px;width:${totalPx}px;"></div>`;
-          } else {
-            const sku = row.sku,
-              lanes = row.lanes;
-            // First row for a SKU shows the name/dot/actions plus which deal
-            // type this line is (pack format still available via tooltip on
-            // the SKU name); later rows for the same SKU just show the deal
-            // type, indented, since the SKU itself isn't repeated.
-            frozenHtml += row.isHeader
-              ? `<div class="cal-label-cell${sCls}" style="grid-row:${rowIndex};height:${h}px;">
-                  <div class="cal-sku-row-top">
-                    <span class="cal-sku-dot" style="background:${calSkuColor(sku.id)};"></span>
-                    <span class="cal-sku-name" title="${esc(sku.name)}${sku.packFormat ? " · " + esc(sku.packFormat) : ""}">${esc(sku.name)}</span>
-                    <span class="cal-sku-actions"><button class="btn-xs" data-cal-add-banner="${banner.id}" data-cal-add-sku="${sku.id}" title="Add deal for this SKU/banner">+</button></span>
-                  </div>
-                  <div class="cal-sku-code" title="${esc(row.groupLabel)}">${esc(row.groupLabel)}</div>
-                </div>`
-              : `<div class="cal-label-cell${sCls}" style="grid-row:${rowIndex};height:${h}px;">
-                  <div class="cal-sku-subtype" title="${esc(row.groupLabel)}">${esc(row.groupLabel)}</div>
-                </div>`;
-            trackHtml += `<div class="cal-track-cell${sCls}" data-banner="${banner.id}" data-sku="${sku.id}" style="grid-row:${rowIndex};height:${h}px;width:${totalPx}px;">
-              ${calGridLinesHtml()}${calTodayLineHtml()}
-              ${lanes
-                .map((laneDeals, laneIdx) =>
-                  laneDeals
-                    .map((d, k) => {
-                      const dLeft = calDiffDays(rangeStart, calParseDate(d.startDate)) * pxPerDay;
-                      const nextLeft = laneDeals[k + 1] ? calDiffDays(rangeStart, calParseDate(laneDeals[k + 1].startDate)) * pxPerDay : totalPx;
-                      const availPx = Math.max(nextLeft - dLeft, 10);
-                      return calBarHtml(d, sku, laneIdx, row.isManual, availPx);
-                    })
-                    .join("")
-                )
-                .join("")}
-            </div>`;
-          }
-          rowIndex++;
-        });
-
-        frozenHtml += `<div class="cal-chain-rail cal-chain-start" style="grid-column:1;grid-row:${bannerStartRow} / span ${rows.length};">
-          <div class="cal-logo-fallback" style="background:${calBannerColor(banner.id)}">${calInitials(banner.name)}</div>
-          <a class="cal-rail-name" href="${calBannerHref(banner.id)}" title="Open ${esc(banner.name)}'s pricing page">${esc(banner.name)}</a>
-          <span class="cal-rail-actions"><button class="btn-xs" data-cal-add-banner="${banner.id}" title="Add deal">+</button></span>
-        </div>`;
+      const skuIds = [];
+      deals.forEach((d) => skuIds.indexOf(d.skuId) === -1 && skuIds.push(d.skuId));
+      rangedSkus.forEach((s) => {
+        if (skuIds.indexOf(s.id) === -1 && latestPricing(s.id, banner.id, null) && (calState.filters.skuId === "all" || calState.filters.skuId === s.id)) skuIds.push(s.id);
       });
-
-      grid.innerHTML = trackHtml;
-      frozen.innerHTML = frozenHtml;
-      document.getElementById("cal-range-label").textContent = calFmtDate(rangeStart) + " → " + calFmtDate(rangeEnd);
-      calAttachBarHandlers();
-      calAttachTrackHandlers();
-      calAttachLabelHandlers();
-      const gs = document.getElementById("cal-gantt-scroll");
-      frozen.style.transform = "translateY(-" + gs.scrollTop + "px)";
-    }
-
-    function calAttachLabelHandlers() {
-      document.querySelectorAll("[data-cal-add-banner]").forEach((btn) => {
-        btn.addEventListener("click", () => calOpenDealModal(null, btn.dataset.calAddBanner, btn.dataset.calAddSku));
+      const skus = calOrderedSkus().filter((s) => skuIds.indexOf(s.id) !== -1);
+      let html = `<div class="pg-grid" style="grid-template-columns:150px repeat(${cols.length}, minmax(136px, 1fr));">`;
+      html += '<div class="pg-corner">SKU</div>';
+      cols.forEach((c) => {
+        const isNow = c.start <= today && c.end >= today;
+        const cyc = {};
+        c.deals.forEach((d) => d.cycleInstance && (cyc[d.cycleInstance] = (cyc[d.cycleInstance] || 0) + 1));
+        const cycLabel = Object.keys(cyc).sort((a, b) => cyc[b] - cyc[a])[0] || "";
+        const month = c.start.toLocaleDateString(undefined, { month: "long" }).toUpperCase();
+        html += `<div class="pg-colhead${isNow ? " pg-now" : ""}"><div class="pg-cyc">${esc(cycLabel) || "&nbsp;"}</div><div class="pg-dates">${pgRangeLabel(c.start, c.end)}</div><div class="pg-month">${month}${isNow ? " · NOW" : ""}</div></div>`;
       });
-    }
-    function calAttachTrackHandlers() {
-      document.querySelectorAll(".cal-track-cell[data-banner]").forEach((cell) => {
-        cell.addEventListener("dblclick", (e) => {
-          if (e.target !== cell) return;
-          const bannerId = cell.dataset.banner,
-            skuId = cell.dataset.sku;
-          const clickX = e.offsetX;
-          const dayOffset = Math.round(clickX / pxPerDay);
-          const startDate = calAddDays(rangeStart, dayOffset);
-          const endDate = calAddDays(startDate, 13);
-          calOpenDealModal(null, bannerId, skuId, { startDate: calFmtDate(startDate), endDate: calFmtDate(endDate) });
-        });
-      });
-    }
-
-    let calDrag = null;
-    function calAttachBarHandlers() {
-      document.querySelectorAll(".cal-bar").forEach((bar) => {
-        bar.addEventListener("mouseenter", (e) => calShowTooltip(bar, e));
-        bar.addEventListener("mousemove", (e) => calPositionTooltip(e));
-        bar.addEventListener("mouseleave", calHideTooltip);
-        bar.addEventListener("mousedown", (e) => calStartDrag(e, bar));
-        bar.addEventListener("click", (e) => {
-          if (bar.dataset.dragged === "1") {
-            bar.dataset.dragged = "0";
+      skus.forEach((sku) => {
+        html += `<div class="pg-skucell"><div class="pg-skuname">${esc(sku.name)}</div><div class="pg-skusub">${esc(sku.style || "")}${sku.style && sku.packFormat ? " · " : ""}${esc(sku.packFormat || "")}</div></div>`;
+        cols.forEach((c, ci) => {
+          const cellDeals = c.deals.filter((d) => d.skuId === sku.id).map(pgDeal);
+          if (cellDeals.length === 0) {
+            html += `<div class="pg-cell pg-emptycell" data-add-sku="${sku.id}" data-col="${ci}" title="Add a deal for ${esc(sku.name)} in this period"><span>+</span></div>`;
             return;
           }
-          calOpenDealModal(State.calendarDeals.find((d) => d.id === bar.dataset.deal));
+          html += '<div class="pg-cell">';
+          cellDeals.forEach((p) => {
+            const ms = calMarginStatus(p.disp);
+            const tip = `${p.name}${p.d.linked ? " (live-linked)" : ""}\n${p.d.startDate} → ${p.d.endDate} · ${p.d.status}${p.d.notes ? "\n" + p.d.notes : ""}`;
+            html += `<div class="pg-deal pg-${p.kind}${p.flagText ? " pg-flag" : ""} pg-st-${p.d.status}" data-deal="${p.d.id}" title="${esc(tip)}">
+              <div class="pg-tagrow"><span class="pg-tag">${p.tag}${p.d.status !== "planned" ? (p.tag ? " · " : "") + p.d.status.toUpperCase() : ""}</span><span class="pg-dot" style="background:${calMarginColor(ms)}"></span></div>
+              ${p.price != null ? `<div class="pg-price">${fmt$(p.price)}</div>` : `<div class="pg-price pg-price-text">${esc(p.name)}</div>`}
+              ${p.scan ? `<div class="pg-scan">${fmt$(p.scan)} scan</div>` : ""}
+              ${p.price != null && !p.priceFromName && !p.d.linked && p.name ? `<div class="pg-name">${esc(p.name)}</div>` : ""}
+              ${p.noteShow ? `<div class="pg-note">${esc(p.noteShow)}</div>` : ""}
+              ${p.flagText ? `<div class="pg-flagtext">${p.flagText}</div>` : ""}
+            </div>`;
+          });
+          html += "</div>";
         });
       });
-    }
-    function calStartDrag(e, bar) {
-      const handle = e.target.getAttribute("data-handle");
-      e.preventDefault();
-      const deal = State.calendarDeals.find((d) => d.id === bar.dataset.deal);
-      const startX = e.clientX;
-      const origStart = calParseDate(deal.startDate),
-        origEnd = calParseDate(deal.endDate);
-      calDrag = { deal, bar, handle, startX, origStart, origEnd, moved: false };
-      calHideTooltip();
-      document.addEventListener("mousemove", calOnDragMove);
-      document.addEventListener("mouseup", calOnDragEnd);
-    }
-    function calOnDragMove(e) {
-      if (!calDrag) return;
-      const dx = e.clientX - calDrag.startX;
-      const dayDelta = Math.round(dx / pxPerDay);
-      if (dayDelta === 0) return;
-      calDrag.moved = true;
-      calDrag.bar.dataset.dragged = "1";
-      let newStart = calDrag.origStart,
-        newEnd = calDrag.origEnd;
-      if (calDrag.handle === "left") {
-        newStart = calAddDays(calDrag.origStart, dayDelta);
-        if (newStart >= newEnd) newStart = calAddDays(newEnd, -1);
-      } else if (calDrag.handle === "right") {
-        newEnd = calAddDays(calDrag.origEnd, dayDelta);
-        if (newEnd <= newStart) newEnd = calAddDays(newStart, 1);
-      } else {
-        newStart = calAddDays(calDrag.origStart, dayDelta);
-        newEnd = calAddDays(calDrag.origEnd, dayDelta);
-      }
-      const left = calDiffDays(rangeStart, newStart) * pxPerDay;
-      const width = Math.max(calDiffDays(newStart, newEnd) * pxPerDay, 10);
-      calDrag.bar.style.left = left + "px";
-      calDrag.bar.style.width = width + "px";
-      calDrag._newStart = newStart;
-      calDrag._newEnd = newEnd;
-    }
-    async function calOnDragEnd() {
-      if (calDrag && calDrag.moved) {
-        calDrag.deal.startDate = calFmtDate(calDrag._newStart);
-        calDrag.deal.endDate = calFmtDate(calDrag._newEnd);
-        await DB.put("calendarDeals", calDrag.deal);
-        calRenderAll();
-      }
-      document.removeEventListener("mousemove", calOnDragMove);
-      document.removeEventListener("mouseup", calOnDragEnd);
-      calDrag = null;
-    }
-
-    let calTooltipEl = null;
-    function calShowTooltip(bar, e) {
-      const deal = State.calendarDeals.find((d) => d.id === bar.dataset.deal);
-      const banner = bannerById(deal.bannerId);
-      const sku = skuById(deal.skuId);
-      const disp = calDealDisplay(deal);
-      calHideTooltip();
-      calTooltipEl = document.createElement("div");
-      calTooltipEl.className = "cal-tooltip";
-      const mStatus = calMarginStatus(disp);
-      const mLabel = mStatus === "met" ? "Meeting target" : mStatus === "below" ? "Below target" : disp.pending ? "No price set for this deal type yet" : "No actual yet";
-      calTooltipEl.innerHTML =
-        `<div><b>${esc(disp.promoName)}</b>${disp.linked ? ' <span class="cal-muted">(live-linked)</span>' : ' <span class="cal-muted">(manual)</span>'}</div>` +
-        `<div class="cal-muted">${esc(banner ? banner.name : "")} · ${esc(deal.cycleInstance || "")}</div>` +
-        `<div class="cal-row"><span>SKU</span><span>${esc(sku ? sku.name : "")}</span></div>` +
-        `<div class="cal-row"><span>Dates</span><span>${deal.startDate} → ${deal.endDate}</span></div>` +
-        (disp.shelfRRP != null ? `<div class="cal-row"><span>Shelf RRP (inc GST)</span><span>${fmt$(disp.shelfRRP)}</span></div>` : "") +
-        `<div class="cal-row"><span>Target margin</span><span>${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "—"}</span></div>` +
-        `<div class="cal-row"><span>Actual/banner margin</span><span>${disp.actualMarginPct != null ? fmtPct(disp.actualMarginPct) : "—"} (${mLabel})</span></div>` +
-        `<div class="cal-row"><span>Status</span><span>${esc(deal.status)}</span></div>` +
-        (deal.notes ? `<div class="cal-muted" style="margin-top:4px;">${esc(deal.notes)}</div>` : "");
-      document.body.appendChild(calTooltipEl);
-      calPositionTooltip(e);
-    }
-    function calPositionTooltip(e) {
-      if (!calTooltipEl) return;
-      calTooltipEl.style.left = e.clientX + 14 + "px";
-      calTooltipEl.style.top = e.clientY + 14 + "px";
-    }
-    function calHideTooltip() {
-      if (calTooltipEl) {
-        calTooltipEl.remove();
-        calTooltipEl = null;
-      }
+      html += "</div>";
+      wrap.innerHTML = html;
+      wrap.querySelectorAll(".pg-deal").forEach((el) => el.addEventListener("click", () => calOpenDealModal(State.calendarDeals.find((d) => d.id === el.dataset.deal))));
+      wrap.querySelectorAll(".pg-emptycell").forEach((el) =>
+        el.addEventListener("click", () => {
+          const c = cols[parseInt(el.dataset.col, 10)];
+          calOpenDealModal(null, banner.id, el.dataset.addSku, { startDate: calFmtDate(c.start), endDate: calFmtDate(c.end) });
+        })
+      );
     }
 
     // ---------------- Table ----------------
@@ -2397,24 +2091,17 @@ const App = (function () {
     // ---------------- Wiring ----------------
     function calSetView(view) {
       calState.view = view;
-      document.getElementById("cal-view-agenda").classList.toggle("active", view === "agenda");
-      document.getElementById("cal-view-timeline").classList.toggle("active", view === "timeline");
+      document.getElementById("cal-view-grid").classList.toggle("active", view === "grid");
       document.getElementById("cal-view-table").classList.toggle("active", view === "table");
-      document.getElementById("cal-agenda-view").style.display = view === "agenda" ? "" : "none";
-      document.getElementById("cal-timeline-view").style.display = view === "timeline" ? "" : "none";
+      document.getElementById("pg-grid-view").style.display = view === "grid" ? "" : "none";
       document.getElementById("cal-table-view").style.display = view === "table" ? "" : "none";
       calRenderAll();
-      // The Gantt only computes its date range/scroll math when it
-      // actually renders, so line it up on today the first time someone
-      // switches into it (matches the "6 Months" zoom default).
-      if (view === "timeline") calScrollToToday(40);
     }
-    document.getElementById("cal-view-agenda").addEventListener("click", () => calSetView("agenda"));
-    document.getElementById("cal-view-timeline").addEventListener("click", () => calSetView("timeline"));
+    document.getElementById("cal-view-grid").addEventListener("click", () => calSetView("grid"));
     document.getElementById("cal-view-table").addEventListener("click", () => calSetView("table"));
-    document.getElementById("cal-add-deal").addEventListener("click", () => calOpenDealModal(null));
-    document.getElementById("cal-filter-banner").addEventListener("change", (e) => {
-      calState.filters.bannerId = e.target.value;
+    document.getElementById("cal-add-deal").addEventListener("click", () => calOpenDealModal(null, banner.id));
+    document.getElementById("pg-range").addEventListener("change", (e) => {
+      calState.range = e.target.value;
       calRenderAll();
     });
     document.getElementById("cal-filter-sku").addEventListener("change", (e) => {
@@ -2429,40 +2116,7 @@ const App = (function () {
       calState.filters.search = e.target.value;
       calRenderAll();
     });
-    function calScrollToToday(leadInPx) {
-      const t = new Date();
-      t.setHours(0, 0, 0, 0);
-      const offset = calDiffDays(rangeStart, t) * pxPerDay;
-      document.getElementById("cal-gantt-scroll").scrollLeft = Math.max(offset - (leadInPx != null ? leadInPx : 200), 0);
-    }
-    function calSetZoomActive() {
-      document.querySelectorAll(".cal-zoom-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.zoom === calState.zoom));
-    }
-    document.querySelectorAll(".cal-zoom-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        calState.zoom = btn.dataset.zoom;
-        calRenderTimeline();
-        calSetZoomActive();
-        // "6 Months" is meant for forward planning, so line the view up on
-        // today with a small lead-in rather than leaving it wherever the
-        // scroll position happened to be at the old zoom level.
-        if (calState.zoom === "half") calScrollToToday(40);
-      });
-    });
-    calSetZoomActive();
-    document.getElementById("cal-scroll-today").addEventListener("click", () => calScrollToToday(200));
-    document.getElementById("cal-gantt-scroll").addEventListener("scroll", function () {
-      document.getElementById("cal-frozen-inner").style.transform = "translateY(-" + this.scrollTop + "px)";
-    });
-    document.getElementById("cal-frozen-viewport").addEventListener(
-      "wheel",
-      (e) => {
-        e.preventDefault();
-        document.getElementById("cal-gantt-scroll").scrollTop += e.deltaY;
-      },
-      { passive: false }
-    );
-    document.querySelectorAll('#cal-table-view thead th[data-sort]').forEach((th) => {
+    document.querySelectorAll("#cal-table-view thead th[data-sort]").forEach((th) => {
       th.addEventListener("click", () => {
         const key = th.dataset.sort;
         if (calState.sort.key === key) calState.sort.dir *= -1;
@@ -2475,7 +2129,13 @@ const App = (function () {
     });
 
     calRenderAll();
+  }
+
+  // The old shared calendar is gone — send old links to the first banner.
+  route("calendar", async () => {
+    navigate("#/banner/" + (State.banners[0] ? State.banners[0].id : ""));
   });
+
 
   // ------------------------------------------------------------ Data / Settings
   route("data", async (rest, main) => {
@@ -2558,19 +2218,23 @@ const App = (function () {
     State.viewPeriod = currentPeriod;
 
     const nav = document.getElementById("nav-links");
-    const groupLinks = State.bannerGroups.map((g) => `<a class="nav-link" data-route="banner" href="#/banner/${g.id}">${esc(g.shortName)}</a>`).join("");
     nav.innerHTML = `
       <a class="nav-link" data-route="dashboard" href="#/dashboard">Dashboard</a>
       <a class="nav-link" data-route="cogs" href="#/cogs">COGS Master</a>
       <a class="nav-link" data-route="sku-tool" href="#/sku-tool">SKU Tool</a>
-      ${groupLinks}
       <a class="nav-link" data-route="compare" href="#/compare">Compare SKUs</a>
       <a class="nav-link" data-route="trends" href="#/trends">Trends</a>
-      <a class="nav-link" data-route="calendar" href="#/calendar">Promo Calendar</a>
       <a class="nav-link" data-route="cpi-update" href="#/cpi-update">CPI Update</a>
       <a class="nav-link" data-route="data" href="#/data">Data &amp; Backup</a>
     `;
 
+    const bannerNav = document.getElementById("banner-nav");
+    bannerNav.innerHTML = State.bannerGroups
+      .map((g) => {
+        const bs = State.banners.filter((b) => b.groupId === g.id);
+        return `<span class="bn-group"><span class="bn-group-label">${esc(g.shortName)}</span>${bs.map((b) => `<a class="banner-tab" data-banner="${b.id}" href="#/banner/${b.id}">${esc(b.name)}</a>`).join("")}</span>`;
+      })
+      .join("");
     window.addEventListener("hashchange", onHashChange);
     onHashChange();
   }
