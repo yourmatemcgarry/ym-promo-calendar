@@ -250,8 +250,9 @@ Endeavour / Coles / Independents). Each tab contains, top to bottom:
   SLG Slotting Board); deals span the periods they cover.
 - **Deal builder** — under each SKU card, every deal has its own name, format
   (Single / Multipack / Carton, with units per pack), Shelf RRP, discount,
-  scan and Target %. Formats also include **2 for $X** (a multipack ×2: enter
-  the price for the pair as Shelf RRP) and **Carton + free pack** (set the free
+  scan and Target %. Formats also include **2 for $X** (two multipacks: set the
+  units per pack, e.g. 4, and enter the price for the pair as Shelf RRP — margin
+  is worked out on half that per pack) and **Carton + free pack** (set the free
   units, default 4; the banner margin is unchanged and YM's COGS includes the
   free units). Linked calendar deals pick one of these deals and show
   its price, scan and margin vs target on the timeline.

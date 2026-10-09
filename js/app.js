@@ -179,7 +179,7 @@ const App = (function () {
   const PACK_FORMATS = [
     { id: "single", label: "Single", tag: "SGL" },
     { id: "multipack", label: "Multipack", tag: "MPK" },
-    { id: "twofor", label: "2 for $X (multipack ×2)", tag: "2 FOR" },
+    { id: "twofor", label: "2 for $X (2 multipacks)", tag: "2 FOR" },
     { id: "carton", label: "Carton", tag: "CAR" },
     { id: "cartonfree", label: "Carton + free pack", tag: "CAR+FREE" },
   ];
@@ -192,7 +192,6 @@ const App = (function () {
   function packQtyFor(sku, format, packUnits) {
     const upc = (sku && sku.unitsPerCarton) || 16;
     if (format === "carton" || format === "cartonfree") return 1;
-    if (format === "twofor") return upc / 2;
     if (format === "single") return upc;
     return upc / (packUnits || 4);
   }
@@ -211,11 +210,12 @@ const App = (function () {
       feeWaterfall: terms ? terms.feeWaterfall : [],
       distributorFeePct: terms ? terms.distributorFeePct : 0,
       scanDeal: deal.scanDeal || 0,
-      shelfRRP: deal.shelfRRP,
+      // 2 for $X: the price entered is for the pair of packs, so each pack sells at half of it
+      shelfRRP: deal.packFormat === "twofor" && deal.shelfRRP != null ? deal.shelfRRP / 2 : deal.shelfRRP,
       cogs: cogs ? { productCogs: cogs.productCogs } : { productCogs: 0 },
       bannerTerms: terms || {},
       targetMarginPct: targetPct,
-      packQty: deal.packQty || meta.defaultPackQty || 1,
+      packQty: deal.packFormat === "twofor" ? packQtyFor(sku, "twofor", deal.packUnits) : deal.packQty || meta.defaultPackQty || 1,
       gstRate: GST_RATE,
     });
     // Carton + free pack: YM gives extra units away at no charge, so the banner's margin is
@@ -874,7 +874,7 @@ const App = (function () {
         <button class="btn-xs deal-expand-btn" aria-expanded="false" aria-label="Show deal details">▾</button>
       </div>
       <div class="deal-row-detail">
-        <label class="deal-inline packunits-wrap" title="Units in each multipack (e.g. 4 for a 4-pack, 6 for a 6-pack)">Units per pack / free units<input type="number" step="1" min="1" class="packunits-input" value="${packUnits}" ${fmtSel === "multipack" || fmtSel === "cartonfree" ? "" : "disabled"}></label>
+        <label class="deal-inline packunits-wrap" title="Units in each multipack (e.g. 4 for a 4-pack, 6 for a 6-pack)">Units per pack / free units<input type="number" step="1" min="1" class="packunits-input" value="${packUnits}" ${fmtSel === "multipack" || fmtSel === "twofor" || fmtSel === "cartonfree" ? "" : "disabled"}></label>
         <label class="deal-inline">Scan $/unit<input type="number" step="0.01" class="scan-input" value="${deal.scanDeal || 0}"></label>
         <span>YM Net <strong class="out-net">${fmt$(m.ymNetDeal)}</strong></span>
         <span>YM COGS <strong class="out-cogs">${fmt$(m.cost.total)}</strong></span>
@@ -900,7 +900,7 @@ const App = (function () {
       deal.label = row.querySelector(".name-input").value;
       const fmtSelEl = row.querySelector(".format-select");
       const puEl = row.querySelector(".packunits-input");
-      puEl.disabled = fmtSelEl.value !== "multipack" && fmtSelEl.value !== "cartonfree";
+      puEl.disabled = !["multipack", "twofor", "cartonfree"].includes(fmtSelEl.value);
       deal.packFormat = fmtSelEl.value;
       deal.packUnits = parseFloat(puEl.value) || 4;
       deal.packQty = packQtyFor(sku, deal.packFormat, deal.packUnits);
@@ -941,7 +941,7 @@ const App = (function () {
         const row = e.target.closest(".deal-row");
         const pu = row.querySelector(".packunits-input");
         // switching to multipack: start from a sensible pack size rather than the carton count
-        if ((e.target.value === "multipack" || e.target.value === "cartonfree") && (parseFloat(pu.value) || 0) >= (sku.unitsPerCarton || 16)) pu.value = 4;
+        if ((e.target.value === "multipack" || e.target.value === "twofor" || e.target.value === "cartonfree") && (parseFloat(pu.value) || 0) >= (sku.unitsPerCarton || 16)) pu.value = 4;
         recalc();
       }
     });
@@ -1939,9 +1939,9 @@ const App = (function () {
             const tip = `${p.name}${p.d.linked ? " (live-linked)" : ""}\n${p.d.startDate} → ${p.d.endDate} · ${p.d.status}${p.stats ? "\nMargin / target: " + p.stats : ""}${p.d.notes ? "\n" + p.d.notes : ""}`;
             html += `<div class="pg-deal pg-${p.kind}${p.flagText ? " pg-flag" : ""} pg-st-${p.d.status}" style="grid-row:${r};grid-column:${it.c0 + 2} / span ${it.c1 - it.c0 + 1};" data-deal="${p.d.id}" title="${esc(tip)}">
               <div class="pg-tagrow"><span class="pg-tag">${p.tag}${p.d.status !== "planned" ? (p.tag ? " · " : "") + p.d.status.toUpperCase() : ""}</span><span class="pg-dot" style="background:${calMarginColor(ms)}"></span></div>
-              ${p.price != null ? `<div class="pg-price">${fmt$(p.price)}</div>` : `<div class="pg-price pg-price-text">${esc(p.name)}</div>`}
+              <div class="pg-promoname">${esc(p.name)}</div>
+              ${p.price != null && !p.priceFromName ? `<div class="pg-price">${fmt$(p.price)}</div>` : ""}
               ${p.scan ? `<div class="pg-scan">${fmt$(p.scan)} scan</div>` : ""}
-              ${p.price != null && !p.priceFromName && p.name ? `<div class="pg-name">${esc(p.name)}</div>` : ""}
               ${p.stats ? `<div class="pg-stats pg-stats-${ms}">${p.stats}</div>` : ""}
               ${p.noteShow ? `<div class="pg-note">${esc(p.noteShow)}</div>` : ""}
               ${p.flagText ? `<div class="pg-flagtext">${p.flagText}</div>` : ""}

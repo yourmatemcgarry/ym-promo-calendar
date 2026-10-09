@@ -465,3 +465,5 @@ textarea { min-height: 60px; resize: vertical; }
 .pg-deal { padding: 6px 7px; border-bottom: 1px solid #ddd8c9; border-right: 1px solid #ddd8c9; }
 .pg-price { font-size: 15px; }
 .pg-wrap { overflow-x: auto; }
+.pg-promoname { font-weight: 800; font-size: 15px; line-height: 1.2; margin-top: 4px; color: #1b2640; overflow-wrap: anywhere; }
+.pg-price { font-size: 14px; font-weight: 700; margin-top: 3px; }
