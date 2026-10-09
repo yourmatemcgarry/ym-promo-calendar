@@ -179,17 +179,20 @@ const App = (function () {
   const PACK_FORMATS = [
     { id: "single", label: "Single", tag: "SGL" },
     { id: "multipack", label: "Multipack", tag: "MPK" },
+    { id: "twofor", label: "2 for $X (multipack ×2)", tag: "2 FOR" },
     { id: "carton", label: "Carton", tag: "CAR" },
+    { id: "cartonfree", label: "Carton + free pack", tag: "CAR+FREE" },
   ];
   function dealPackFormat(banner, deal) {
     if (deal.packFormat) return deal.packFormat;
     const t = dealMeta(banner, deal).packType;
-    return t === "carton" ? "carton" : t === "single" ? "single" : "multipack";
+    return t === "carton" || t === "cartonfree" || t === "twofor" ? t : t === "single" ? "single" : "multipack";
   }
   /** Shelf units per carton: carton=1, single=every unit, multipack=carton / units-per-pack. */
   function packQtyFor(sku, format, packUnits) {
     const upc = (sku && sku.unitsPerCarton) || 16;
-    if (format === "carton") return 1;
+    if (format === "carton" || format === "cartonfree") return 1;
+    if (format === "twofor") return upc / 2;
     if (format === "single") return upc;
     return upc / (packUnits || 4);
   }
@@ -215,6 +218,16 @@ const App = (function () {
       packQty: deal.packQty || meta.defaultPackQty || 1,
       gstRate: GST_RATE,
     });
+    // Carton + free pack: YM gives extra units away at no charge, so the banner's margin is
+    // unchanged but YM carries the landed cost of those units.
+    if (deal.packFormat === "cartonfree") {
+      const upc = (sku && sku.unitsPerCarton) || 16;
+      const freeUnits = deal.packUnits || 4;
+      const freeCost = (result.cost.total / upc) * freeUnits;
+      result.cost = Object.assign({}, result.cost, { total: result.cost.total + freeCost, freeGoods: freeCost });
+      result.profit = Math.round((result.ymNetDeal - result.cost.total) * 100) / 100;
+      result.gpPct = result.ymNetDeal !== 0 ? result.profit / result.ymNetDeal : null;
+    }
     return Object.assign({ deal, meta, cogsFound: !!cogs, termsFound: !!terms }, result);
   }
 
@@ -861,7 +874,7 @@ const App = (function () {
         <button class="btn-xs deal-expand-btn" aria-expanded="false" aria-label="Show deal details">▾</button>
       </div>
       <div class="deal-row-detail">
-        <label class="deal-inline packunits-wrap" title="Units in each multipack (e.g. 4 for a 4-pack, 6 for a 6-pack)">Units per pack<input type="number" step="1" min="1" class="packunits-input" value="${packUnits}" ${fmtSel === "multipack" ? "" : "disabled"}></label>
+        <label class="deal-inline packunits-wrap" title="Units in each multipack (e.g. 4 for a 4-pack, 6 for a 6-pack)">Units per pack / free units<input type="number" step="1" min="1" class="packunits-input" value="${packUnits}" ${fmtSel === "multipack" || fmtSel === "cartonfree" ? "" : "disabled"}></label>
         <label class="deal-inline">Scan $/unit<input type="number" step="0.01" class="scan-input" value="${deal.scanDeal || 0}"></label>
         <span>YM Net <strong class="out-net">${fmt$(m.ymNetDeal)}</strong></span>
         <span>YM COGS <strong class="out-cogs">${fmt$(m.cost.total)}</strong></span>
@@ -887,7 +900,7 @@ const App = (function () {
       deal.label = row.querySelector(".name-input").value;
       const fmtSelEl = row.querySelector(".format-select");
       const puEl = row.querySelector(".packunits-input");
-      puEl.disabled = fmtSelEl.value !== "multipack";
+      puEl.disabled = fmtSelEl.value !== "multipack" && fmtSelEl.value !== "cartonfree";
       deal.packFormat = fmtSelEl.value;
       deal.packUnits = parseFloat(puEl.value) || 4;
       deal.packQty = packQtyFor(sku, deal.packFormat, deal.packUnits);
@@ -928,7 +941,7 @@ const App = (function () {
         const row = e.target.closest(".deal-row");
         const pu = row.querySelector(".packunits-input");
         // switching to multipack: start from a sensible pack size rather than the carton count
-        if (e.target.value === "multipack" && (parseFloat(pu.value) || 0) >= (sku.unitsPerCarton || 16)) pu.value = 4;
+        if ((e.target.value === "multipack" || e.target.value === "cartonfree") && (parseFloat(pu.value) || 0) >= (sku.unitsPerCarton || 16)) pu.value = 4;
         recalc();
       }
     });
@@ -1640,6 +1653,7 @@ const App = (function () {
       shelfRRP: dealRow.shelfRRP,
       scanDeal: dealRow.scanDeal || 0,
       packFormat: dealPackFormat(banner, dealRow),
+      packUnits: dealRow.packUnits || null,
       ymNetDeal: m.ymNetDeal,
       profit: m.profit,
       gpPct: m.gpPct,
@@ -1756,7 +1770,13 @@ const App = (function () {
         tag = "";
       const uom = /UOM:\s*(\w+)/i.exec(notes);
       const t1 = (d.linked && disp.packFormat ? disp.packFormat : hint) + " " + (uom ? uom[1] : "");
-      if (/single/i.test(t1)) {
+      if (/twofor/i.test(t1)) {
+        kind = "mpk";
+        tag = "2 FOR";
+      } else if (/cartonfree/i.test(t1)) {
+        kind = "car";
+        tag = "CAR + FREE " + (d.linked && disp.packUnits ? disp.packUnits + "PK" : "PACK");
+      } else if (/single/i.test(t1)) {
         kind = "sgl";
         tag = "SGL";
       } else if (/multipack|mpk|pack/i.test(t1)) {
