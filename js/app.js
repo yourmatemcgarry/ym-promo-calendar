@@ -1746,6 +1746,7 @@ const App = (function () {
           <button class="btn-sm" id="pg-prev">◀ Earlier</button>
           <button class="btn-sm" id="pg-today">Today</button>
           <button class="btn-sm" id="pg-next">Later ▶</button>
+          <button class="btn-sm" id="pg-notes-toggle">Hide meeting notes</button>
           <span class="muted small">Showing ~6 months at a time — scroll sideways (or use the buttons) to see the past and future.</span>
         </div>
         <div id="pg-grid-wrap" class="pg-wrap"></div>
@@ -1886,6 +1887,12 @@ const App = (function () {
         em = e.toLocaleDateString("en-AU", { month: "short" });
       return sm === em && s.getFullYear() === e.getFullYear() ? `${s.getDate()}–${e.getDate()} ${sm}` : `${s.getDate()} ${sm}–${e.getDate()} ${em}`;
     }
+    function updateNotesBtn() {
+      const btn = document.getElementById("pg-notes-toggle");
+      if (!btn) return;
+      const n = Object.keys(banner.plannerNotes || {}).length;
+      btn.textContent = (banner.notesHidden ? "Show meeting notes" : "Hide meeting notes") + (n ? ` (${n})` : "");
+    }
     function calRenderGrid() {
       const wrap = document.getElementById("pg-grid-wrap");
       const today = new Date();
@@ -1930,6 +1937,16 @@ const App = (function () {
         html += `<div class="pg-colhead${isNow ? " pg-now" : ""}${c.beer ? " pg-beer" : ""}" style="grid-row:1;grid-column:${i + 2};"><div class="pg-cyc">${esc(cycLabel) || "&nbsp;"}${c.beer ? ' <span class="pg-beertag">BEER</span>' : ""}</div><div class="pg-dates">${pgRangeLabel(c.start, c.end)}</div><div class="pg-month">${esc(month)}${isNow ? " · NOW" : ""}</div></div>`;
       });
       let row = 2;
+      // Meeting-notes row: one editable note per period column, stored on the banner record.
+      const notes = banner.plannerNotes || {};
+      if (!banner.notesHidden) {
+        html += `<div class="pg-corner pg-notelabel" style="grid-row:2;grid-column:1;">MEETING NOTES<br><span class="muted small" style="letter-spacing:0;font-family:inherit;">with promo planners</span></div>`;
+        cols.forEach((c, i) => {
+          const key = calFmtDate(c.start);
+          html += `<div class="pg-notecell" style="grid-row:2;grid-column:${i + 2};"><textarea data-notekey="${key}" placeholder="Notes…" rows="3">${esc(notes[key] || "")}</textarea></div>`;
+        });
+        row = 3;
+      }
       skus.forEach((sku) => {
         const items = [];
         deals
@@ -1984,6 +2001,28 @@ const App = (function () {
         wrap.scrollLeft = Math.max(0, (ti < 0 ? N - 1 : ti) - 0) * colW;
         calState.scrollLeft = wrap.scrollLeft;
       }
+      let noteTimer = null;
+      const saveNotes = async () => {
+        banner.plannerNotes = banner.plannerNotes || {};
+        wrap.querySelectorAll("textarea[data-notekey]").forEach((t) => {
+          const v = t.value.trim();
+          if (v) banner.plannerNotes[t.dataset.notekey] = t.value;
+          else delete banner.plannerNotes[t.dataset.notekey];
+        });
+        await DB.put("banners", banner);
+        updateNotesBtn();
+      };
+      wrap.querySelectorAll("textarea[data-notekey]").forEach((t) => {
+        t.addEventListener("input", () => {
+          clearTimeout(noteTimer);
+          noteTimer = setTimeout(saveNotes, 500);
+        });
+        t.addEventListener("blur", () => {
+          clearTimeout(noteTimer);
+          saveNotes();
+        });
+      });
+      updateNotesBtn();
       wrap.querySelectorAll(".pg-deal").forEach((el) => el.addEventListener("click", () => calOpenDealModal(State.calendarDeals.find((d) => d.id === el.dataset.deal))));
       wrap.querySelectorAll(".pg-emptycell").forEach((el) =>
         el.addEventListener("click", () => {
@@ -2289,6 +2328,11 @@ const App = (function () {
       const step = () => (calState.colW || 120) * 6;
       document.getElementById("pg-prev").addEventListener("click", () => wrap.scrollBy({ left: -step(), behavior: "smooth" }));
       document.getElementById("pg-next").addEventListener("click", () => wrap.scrollBy({ left: step(), behavior: "smooth" }));
+      document.getElementById("pg-notes-toggle").addEventListener("click", async () => {
+        banner.notesHidden = !banner.notesHidden;
+        await DB.put("banners", banner);
+        calRenderGrid();
+      });
       document.getElementById("pg-today").addEventListener("click", () => {
         calState.scrollLeft = null;
         calRenderGrid();
