@@ -1639,7 +1639,7 @@ const App = (function () {
     const dt = (banner.dealTypes || []).find((d) => d.id === entry.dealTypeId);
     const pr = latestPricing(sku.id, banner.id, null); // always the latest period — this is what makes it "live"
     const dealRow = pr ? pr.deals.find((d) => d.dealTypeId === entry.dealTypeId) : null;
-    const label = (dealRow && dealRow.label) || (dt ? dt.label : "(deal removed)");
+    const label = entry.promoName || (dealRow && dealRow.label) || (dt ? dt.label : "(deal removed)");
     if (!pr || !dealRow) {
       return { promoName: label, targetMarginPct: null, actualMarginPct: null, linked: true, pending: true };
     }
@@ -2111,9 +2111,9 @@ const App = (function () {
               <select id="cd-dealtype" class="select">${dealTypeOptions || '<option value="">No deals on this SKU yet — add one on its pricing card</option>'}</select>
               <div class="muted small" id="cd-linked-preview" style="margin-top:6px;"></div>
             </div>
+            <label>Promo name <span class="muted small">(shown on the timeline — stays as you type it, even when linked to a deal)</span></label>
+            <input type="text" id="cd-promoname" value="${esc(d.promoName || "")}" placeholder="e.g. Buy one Larry, get one free">
             <div id="cd-manual-fields" style="display:${d.linked ? "none" : ""};">
-              <label>Promo name</label>
-              <input type="text" id="cd-promoname" value="${esc(d.promoName || "")}">
               <div class="grid-2">
                 <div><label>Target margin %</label><input type="number" step="0.1" id="cd-target" value="${d.targetMarginPct != null ? (d.targetMarginPct * 100).toFixed(2) : ""}"></div>
                 <div><label>Actual margin % (blank if not run yet)</label><input type="number" step="0.1" id="cd-actual" value="${d.actualMarginPct != null ? (d.actualMarginPct * 100).toFixed(2) : ""}"></div>
@@ -2221,7 +2221,7 @@ const App = (function () {
               return;
             }
             newDeal.dealTypeId = dealTypeId;
-            newDeal.promoName = null;
+            newDeal.promoName = document.getElementById("cd-promoname").value.trim() || null; // blank = fall back to the deal's name
             newDeal.targetMarginPct = null;
             newDeal.actualMarginPct = null;
           } else {
