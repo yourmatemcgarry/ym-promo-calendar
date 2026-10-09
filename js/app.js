@@ -1577,6 +1577,12 @@ const App = (function () {
     const parts = name.split(/\s+/);
     return (((parts[0] || "")[0] || "?") + ((parts[1] || "")[0] || "")).toUpperCase();
   }
+  /** ISO yyyy-mm-dd -> Australian d/m/yyyy (or d/m/yy when short). */
+  function fmtDMY(iso, short) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+    if (!m) return iso || "";
+    return `${parseInt(m[3], 10)}/${parseInt(m[2], 10)}/${short ? m[1].slice(2) : m[1]}`;
+  }
   function calParseDate(s) {
     const p = s.split("-").map(Number);
     return new Date(p[0], p[1] - 1, p[2]);
@@ -1654,6 +1660,7 @@ const App = (function () {
       scanDeal: dealRow.scanDeal || 0,
       packFormat: dealPackFormat(banner, dealRow),
       packUnits: dealRow.packUnits || null,
+      dealLabel: dealRow.label || (dt ? dt.label : ""),
       ymNetDeal: m.ymNetDeal,
       profit: m.profit,
       gpPct: m.gpPct,
@@ -1815,7 +1822,8 @@ const App = (function () {
       const flagText = /catalog/i.test(name + " " + notes) ? "Catalogue" : /off[\s-]?location/i.test(name + " " + notes) ? "Off location" : "";
       const noteShow = notes && notes.length <= 70 && !/^UOM:|^Placeholder from/i.test(notes) ? notes : "";
       const stats = disp.actualMarginPct != null ? `${fmtPct(disp.actualMarginPct)}${disp.targetMarginPct != null ? " / " + fmtPct(disp.targetMarginPct) : ""}` : disp.targetMarginPct != null ? `tgt ${fmtPct(disp.targetMarginPct)}` : "";
-      return { d, disp, kind, tag, price, priceFromName, scan, flagText, noteShow, name, stats };
+      const dealLabel = d.linked && disp.dealLabel && disp.dealLabel !== disp.promoName ? disp.dealLabel : "";
+      return { d, disp, kind, tag, dealLabel, price, priceFromName, scan, flagText, noteShow, name, stats };
     }
     function pgOverlap(s1, e1, s2, e2) {
       const a = s1 > s2 ? s1 : s2,
@@ -1874,8 +1882,8 @@ const App = (function () {
       return [idxs[0], idxs[idxs.length - 1]];
     }
     function pgRangeLabel(s, e) {
-      const sm = s.toLocaleDateString(undefined, { month: "short" }),
-        em = e.toLocaleDateString(undefined, { month: "short" });
+      const sm = s.toLocaleDateString("en-AU", { month: "short" }),
+        em = e.toLocaleDateString("en-AU", { month: "short" });
       return sm === em && s.getFullYear() === e.getFullYear() ? `${s.getDate()}–${e.getDate()} ${sm}` : `${s.getDate()} ${sm}–${e.getDate()} ${em}`;
     }
     function calRenderGrid() {
@@ -1918,7 +1926,7 @@ const App = (function () {
           deals.forEach((d) => pgOverlap(calParseDate(d.startDate), calParseDate(d.endDate), c.start, c.end) > 0 && d.cycleInstance && (cyc[d.cycleInstance] = (cyc[d.cycleInstance] || 0) + 1));
           cycLabel = Object.keys(cyc).sort((a, b) => cyc[b] - cyc[a])[0] || "";
         }
-        const month = c.note ? c.note.toUpperCase() : c.start.toLocaleDateString(undefined, { month: "long" }).toUpperCase();
+        const month = c.note ? c.note.toUpperCase() : c.start.toLocaleDateString("en-AU", { month: "long" }).toUpperCase();
         html += `<div class="pg-colhead${isNow ? " pg-now" : ""}${c.beer ? " pg-beer" : ""}" style="grid-row:1;grid-column:${i + 2};"><div class="pg-cyc">${esc(cycLabel) || "&nbsp;"}${c.beer ? ' <span class="pg-beertag">BEER</span>' : ""}</div><div class="pg-dates">${pgRangeLabel(c.start, c.end)}</div><div class="pg-month">${esc(month)}${isNow ? " · NOW" : ""}</div></div>`;
       });
       let row = 2;
@@ -1949,13 +1957,15 @@ const App = (function () {
             for (let c = it.c0; c <= it.c1; c++) covered[c] = true;
             const p = it.p;
             const ms = calMarginStatus(p.disp);
-            const tip = `${p.name}${p.d.linked ? " (live-linked)" : ""}\n${p.d.startDate} → ${p.d.endDate} · ${p.d.status}${p.stats ? "\nMargin / target: " + p.stats : ""}${p.d.notes ? "\n" + p.d.notes : ""}`;
+            const tip = `${p.name}${p.d.linked ? " (live-linked)" : ""}\n${fmtDMY(p.d.startDate)} → ${fmtDMY(p.d.endDate)} · ${p.d.status}${p.stats ? "\nMargin / target: " + p.stats : ""}${p.d.notes ? "\n" + p.d.notes : ""}`;
             html += `<div class="pg-deal pg-${p.kind}${p.flagText ? " pg-flag" : ""} pg-st-${p.d.status}" style="grid-row:${r};grid-column:${it.c0 + 2} / span ${it.c1 - it.c0 + 1};" data-deal="${p.d.id}" title="${esc(tip)}">
-              <div class="pg-tagrow"><span class="pg-tag">${p.tag}${p.d.status !== "planned" ? (p.tag ? " · " : "") + p.d.status.toUpperCase() : ""}</span><span class="pg-dot" style="background:${calMarginColor(ms)}"></span></div>
+              <div class="pg-tagrow"><span class="pg-tag">${p.d.status !== "planned" ? p.d.status.toUpperCase() : "&nbsp;"}</span><span class="pg-dot" style="background:${calMarginColor(ms)}"></span></div>
               <div class="pg-promoname">${esc(p.name)}</div>
-              ${p.price != null && !p.priceFromName ? `<div class="pg-price">${fmt$(p.price)}</div>` : ""}
+              ${p.dealLabel ? `<div class="pg-dealname">${esc(p.dealLabel)}</div>` : ""}
+              ${(p.price != null && !p.priceFromName) || p.tag ? `<div class="pg-pricerow">${p.price != null && !p.priceFromName ? `<span class="pg-price">${fmt$(p.price)}</span>` : ""}${p.tag ? `<span class="pg-tag pg-unit">${p.tag}</span>` : ""}</div>` : ""}
               ${p.scan ? `<div class="pg-scan">${fmt$(p.scan)} scan</div>` : ""}
               ${p.stats ? `<div class="pg-stats pg-stats-${ms}">${p.stats}</div>` : ""}
+              <div class="pg-dates-line">${fmtDMY(p.d.startDate, true)} – ${fmtDMY(p.d.endDate, true)}</div>
               ${p.noteShow ? `<div class="pg-note">${esc(p.noteShow)}</div>` : ""}
               ${p.flagText ? `<div class="pg-flagtext">${p.flagText}</div>` : ""}
             </div>`;
@@ -2029,8 +2039,8 @@ const App = (function () {
           <td>${esc(d.cycleInstance || "")}</td>
           <td>${esc(disp.promoName)}${disp.linked ? " 🔗" : ""}</td>
           <td>${disp.shelfRRP != null ? fmt$(disp.shelfRRP) : "—"}</td>
-          <td>${d.startDate}</td>
-          <td>${d.endDate}</td>
+          <td>${fmtDMY(d.startDate)}</td>
+          <td>${fmtDMY(d.endDate)}</td>
           <td>${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "—"}</td>
           <td>${disp.actualMarginPct != null ? fmtPct(disp.actualMarginPct) : "—"}</td>
           <td><span class="cal-flag" style="background:${calMarginColor(mStatus)}"></span>${esc(d.status)}</td>
