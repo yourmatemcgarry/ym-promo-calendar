@@ -245,7 +245,7 @@ Endeavour / Coles / Independents). Each tab contains, top to bottom:
   that SKU in that period. It's per-banner — there's no shared timeline any
   more. A **Next 6 months / Past / All dates** selector controls the window
   and a **Table** toggle gives a sortable spreadsheet view (with Notes).
-  About 6 months of fortnightly periods fit on screen at once. Star Liquor
+  About 6 months of fortnightly periods fit on screen at once; scroll sideways (or use Earlier / Today / Later) to move through the past and future. Star Liquor
   uses its official P-period calendar (js/banner-calendars.js, from the 2026
   SLG Slotting Board); deals span the periods they cover.
 - **Deal builder** — under each SKU card, every deal has its own name, format

@@ -1707,9 +1707,9 @@ const App = (function () {
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <select id="pg-range" class="select" style="width:auto;">
-            <option value="upcoming">Next 6 months</option>
-            <option value="past">Past</option>
-            <option value="all">All dates</option>
+            <option value="upcoming">Table: next 6 months</option>
+            <option value="past">Table: past</option>
+            <option value="all">Table: all dates</option>
           </select>
           <button class="btn-primary btn-sm" id="cal-add-deal">+ Add deal</button>
         </div>
@@ -1734,6 +1734,12 @@ const App = (function () {
           <span><i class="pg-swatch pg-oth"></i>Other mechanic</span>
           <span><i class="pg-swatch pg-flagsw"></i>Catalogue / off-location</span>
           <span class="muted small">Promo price shown; scan deal beneath. Click a cell to open it, click a blank cell to add a deal.</span>
+        </div>
+        <div class="pg-nav">
+          <button class="btn-sm" id="pg-prev">◀ Earlier</button>
+          <button class="btn-sm" id="pg-today">Today</button>
+          <button class="btn-sm" id="pg-next">Later ▶</button>
+          <span class="muted small">Showing ~6 months at a time — scroll sideways (or use the buttons) to see the past and future.</span>
         </div>
         <div id="pg-grid-wrap" class="pg-wrap"></div>
       </div>
@@ -1876,8 +1882,8 @@ const App = (function () {
       const wrap = document.getElementById("pg-grid-wrap");
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const winStart = calState.range === "upcoming" ? calAddDays(today, -7) : calState.range === "past" ? new Date(2000, 0, 1) : new Date(2000, 0, 1);
-      const winEnd = calState.range === "upcoming" ? calAddDays(today, 190) : calState.range === "past" ? calAddDays(today, -1) : new Date(2100, 0, 1);
+      const winStart = new Date(2000, 0, 1),
+        winEnd = new Date(2100, 0, 1);
       const deals = calFilteredDeals().filter((d) => {
         const s = calParseDate(d.startDate),
           e = calParseDate(d.endDate);
@@ -1895,7 +1901,14 @@ const App = (function () {
       });
       const skus = calOrderedSkus().filter((s) => skuIds.indexOf(s.id) !== -1);
       const N = cols.length;
-      let html = `<div class="pg-grid" style="grid-template-columns:128px repeat(${N}, minmax(86px, 1fr));">`;
+      // Fixed column width sized so ~6 months fit in view; the rest scrolls sideways.
+      const avgDays = Math.max(7, cols.reduce((t, c) => t + calDiffDays(c.start, c.end) + 1, 0) / N);
+      const perView = Math.max(1, Math.round(183 / avgDays));
+      const availW = (wrap.clientWidth || 1300) - 128;
+      const colW = Math.max(86, Math.floor(availW / perView));
+      calState.colW = colW;
+      const prevScroll = calState.scrollLeft;
+      let html = `<div class="pg-grid" style="grid-template-columns:128px repeat(${N}, ${colW}px);">`;
       html += '<div class="pg-corner" style="grid-row:1;grid-column:1;">SKU</div>';
       cols.forEach((c, i) => {
         const isNow = c.start <= today && c.end >= today;
@@ -1955,6 +1968,12 @@ const App = (function () {
       });
       html += "</div>";
       wrap.innerHTML = html;
+      if (prevScroll != null) wrap.scrollLeft = prevScroll;
+      else {
+        const ti = cols.findIndex((c) => c.end >= today);
+        wrap.scrollLeft = Math.max(0, (ti < 0 ? N - 1 : ti) - 0) * colW;
+        calState.scrollLeft = wrap.scrollLeft;
+      }
       wrap.querySelectorAll(".pg-deal").forEach((el) => el.addEventListener("click", () => calOpenDealModal(State.calendarDeals.find((d) => d.id === el.dataset.deal))));
       wrap.querySelectorAll(".pg-emptycell").forEach((el) =>
         el.addEventListener("click", () => {
@@ -2254,6 +2273,17 @@ const App = (function () {
     }
     document.getElementById("cal-view-grid").addEventListener("click", () => calSetView("grid"));
     document.getElementById("cal-view-table").addEventListener("click", () => calSetView("table"));
+    (function () {
+      const wrap = document.getElementById("pg-grid-wrap");
+      wrap.addEventListener("scroll", () => (calState.scrollLeft = wrap.scrollLeft));
+      const step = () => (calState.colW || 120) * 6;
+      document.getElementById("pg-prev").addEventListener("click", () => wrap.scrollBy({ left: -step(), behavior: "smooth" }));
+      document.getElementById("pg-next").addEventListener("click", () => wrap.scrollBy({ left: step(), behavior: "smooth" }));
+      document.getElementById("pg-today").addEventListener("click", () => {
+        calState.scrollLeft = null;
+        calRenderGrid();
+      });
+    })();
     document.getElementById("cal-add-deal").addEventListener("click", () => calOpenDealModal(null, banner.id));
     document.getElementById("pg-range").addEventListener("change", (e) => {
       calState.range = e.target.value;
