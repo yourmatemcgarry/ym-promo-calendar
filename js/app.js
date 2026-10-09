@@ -166,6 +166,8 @@ const App = (function () {
   /** Resolve packType/dealType/label for a deal, preferring the banner's configured deal type. */
   function dealMeta(banner, deal) {
     const dt = banner && banner.dealTypes ? banner.dealTypes.find((d) => d.id === deal.dealTypeId) : null;
+    // A deal built on a SKU card carries its own name and pack format.
+    if (deal.packFormat) return { packType: deal.packFormat, dealType: deal.dealType || (dt && dt.dealType) || "promo", label: deal.label || (dt && dt.label) || "", defaultPackQty: deal.packQty || (dt && dt.defaultPackQty) || 1 };
     if (dt) return { packType: dt.packType, dealType: dt.dealType, label: dt.label, defaultPackQty: dt.defaultPackQty };
     // fallback inference for custom/legacy deals
     const label = deal.label || "";
@@ -174,12 +176,31 @@ const App = (function () {
     return { packType, dealType, label, defaultPackQty: deal.packQty || 1 };
   }
 
+  const PACK_FORMATS = [
+    { id: "single", label: "Single", tag: "SGL" },
+    { id: "multipack", label: "Multipack", tag: "MPK" },
+    { id: "carton", label: "Carton", tag: "CAR" },
+  ];
+  function dealPackFormat(banner, deal) {
+    if (deal.packFormat) return deal.packFormat;
+    const t = dealMeta(banner, deal).packType;
+    return t === "carton" ? "carton" : t === "single" ? "single" : "multipack";
+  }
+  /** Shelf units per carton: carton=1, single=every unit, multipack=carton / units-per-pack. */
+  function packQtyFor(sku, format, packUnits) {
+    const upc = (sku && sku.unitsPerCarton) || 16;
+    if (format === "carton") return 1;
+    if (format === "single") return upc;
+    return upc / (packUnits || 4);
+  }
+
   /** Full computed metrics for a single deal line, using live COGS + banner terms. */
   function computeDeal(sku, banner, pricingRow, deal, asOfPeriod) {
     const cogs = latestCogs(sku.id, asOfPeriod);
     const terms = latestBannerTerms(banner.id, asOfPeriod);
     const meta = dealMeta(banner, deal);
-    const targetPct = targetMarginForDealType(terms, deal.dealTypeId);
+    // Target margin lives on the deal itself; banner-level targets are only a fallback for older deals.
+    const targetPct = deal.targetPct != null ? deal.targetPct : targetMarginForDealType(terms, deal.dealTypeId);
     const listPrice = effectiveListPrice(sku, banner, asOfPeriod, pricingRow);
     const result = Calc.evaluateDeal({
       listPrice,
@@ -213,6 +234,7 @@ const App = (function () {
     const activeBanner = base === "banner" ? (State.banners.find((b) => b.id === (rest[1] || rest[0])) || (State.banners.find((b) => b.groupId === rest[0]) || {})).id : null;
     document.querySelectorAll(".banner-tab").forEach((a) => a.classList.toggle("active", a.dataset.banner === activeBanner));
     const main = document.getElementById("main");
+    main.classList.toggle("wide", base === "banner");
     main.innerHTML = '<div class="loading">Loading…</div>';
     try {
       await fn(rest, main);
@@ -764,7 +786,8 @@ const App = (function () {
         <div class="add-deal-row">
           <select class="add-deal-type-select">
             <option value="">+ Add deal…</option>
-            ${(banner.dealTypes || []).map((dt) => `<option value="${dt.id}">${esc(dt.label)}</option>`).join("")}
+            <option value="__custom">Custom deal (name it yourself)</option>
+            ${(banner.dealTypes || []).map((dt) => `<option value="${dt.id}">${esc(dt.label)} — template</option>`).join("")}
           </select>
         </div>
       </div>`;
@@ -805,11 +828,18 @@ const App = (function () {
   function dealRowHTML(sku, banner, pricing, deal, i, period) {
     const m = computeDeal(sku, banner, pricing, deal, period);
     const status = dealStatusInfo(m);
+    const fmtSel = dealPackFormat(banner, deal);
+    const packUnits = deal.packUnits || (deal.packQty ? Math.round(((sku.unitsPerCarton || 16) / deal.packQty) * 100) / 100 : 4);
+    const targetShown = m.targetMarginPct != null ? Math.round(m.targetMarginPct * 10000) / 100 : "";
     return `<div class="deal-row" data-i="${i}">
       <div class="deal-row-grid">
         <div class="deal-name-cell">
           <span class="deal-dot ${status.cls}" title="${esc(status.text)}"></span>
-          <span class="deal-name">${esc(deal.label)}</span>
+          <input type="text" class="name-input" value="${esc(deal.label || "")}" placeholder="Deal name" title="Deal name — shown on the promo timeline">
+        </div>
+        <div class="deal-mini">
+          <span class="deal-mini-label">Format</span>
+          <select class="format-select">${PACK_FORMATS.map((f) => `<option value="${f.id}" ${f.id === fmtSel ? "selected" : ""}>${f.label}</option>`).join("")}</select>
         </div>
         <div class="deal-mini">
           <span class="deal-mini-label" title="Shelf RRP (inc GST)">Shelf RRP</span>
@@ -823,20 +853,21 @@ const App = (function () {
           <span class="deal-mini-label">Margin</span>
           <strong class="out-margin">${fmtPct(m.bannerMarginPct)}</strong>
         </div>
-        <div class="deal-mini deal-mini-readout">
-          <span class="deal-mini-label">Target</span>
-          <strong class="out-target">${fmtPct(m.targetMarginPct)}</strong>
+        <div class="deal-mini">
+          <span class="deal-mini-label">Target %</span>
+          <input type="number" step="0.1" class="target-input" value="${targetShown}" placeholder="—">
         </div>
         <span class="deal-chip out-status ${status.gapCls}" title="vs target">${status.gapText}</span>
         <button class="btn-xs deal-expand-btn" aria-expanded="false" aria-label="Show deal details">▾</button>
       </div>
       <div class="deal-row-detail">
+        <label class="deal-inline packunits-wrap" title="Units in each multipack (e.g. 4 for a 4-pack, 6 for a 6-pack)">Units per pack<input type="number" step="1" min="1" class="packunits-input" value="${packUnits}" ${fmtSel === "multipack" ? "" : "disabled"}></label>
         <label class="deal-inline">Scan $/unit<input type="number" step="0.01" class="scan-input" value="${deal.scanDeal || 0}"></label>
         <span>YM Net <strong class="out-net">${fmt$(m.ymNetDeal)}</strong></span>
         <span>YM COGS <strong class="out-cogs">${fmt$(m.cost.total)}</strong></span>
         <span>Profit <strong class="out-profit ${m.profit >= 0 ? "pos" : "neg"}">${fmt$(m.profit)}</strong></span>
         <span>YM GP% <strong class="out-gp">${fmtPct(m.gpPct)}</strong></span>
-        ${m.targetMarginPct != null ? `<button class="btn-xs btn-fill-scan" title="Fill in the scan deal needed to hit target">Fill scan deal</button>` : ""}
+        <button class="btn-xs btn-fill-scan" title="Fill in the scan deal needed to hit target">Fill scan deal</button>
         <button class="btn-xs remove-deal-row">✕</button>
       </div>
     </div>`;
@@ -853,6 +884,15 @@ const App = (function () {
       deal.shelfRRP = parseFloat(row.querySelector(".rrp-input").value || 0);
       deal.discountPerCarton = parseFloat(row.querySelector(".discount-input").value || 0);
       deal.scanDeal = parseFloat(row.querySelector(".scan-input").value || 0);
+      deal.label = row.querySelector(".name-input").value;
+      const fmtSelEl = row.querySelector(".format-select");
+      const puEl = row.querySelector(".packunits-input");
+      puEl.disabled = fmtSelEl.value !== "multipack";
+      deal.packFormat = fmtSelEl.value;
+      deal.packUnits = parseFloat(puEl.value) || 4;
+      deal.packQty = packQtyFor(sku, deal.packFormat, deal.packUnits);
+      const tgtRaw = row.querySelector(".target-input").value;
+      deal.targetPct = tgtRaw === "" ? null : parseFloat(tgtRaw) / 100;
       const tempPricing = { listPrice, deals: cardEl._deals };
       const m = computeDeal(sku, banner, tempPricing, deal, period);
       row.querySelector(".out-net").textContent = fmt$(m.ymNetDeal);
@@ -862,7 +902,6 @@ const App = (function () {
       profitCell.className = "out-profit " + (m.profit >= 0 ? "pos" : "neg");
       row.querySelector(".out-gp").textContent = fmtPct(m.gpPct);
       row.querySelector(".out-margin").textContent = fmtPct(m.bannerMarginPct);
-      row.querySelector(".out-target").textContent = fmtPct(m.targetMarginPct);
       const status = dealStatusInfo(m);
       const dot = row.querySelector(".deal-dot");
       dot.className = "deal-dot " + status.cls;
@@ -882,7 +921,16 @@ const App = (function () {
     const recalc = () => recalcCard(cardEl, sku, banner, period);
     cardEl.querySelector(".list-price-input").addEventListener("input", recalc);
     cardEl.addEventListener("input", (e) => {
-      if (e.target.classList.contains("rrp-input") || e.target.classList.contains("discount-input") || e.target.classList.contains("scan-input")) recalc();
+      if (["rrp-input", "discount-input", "scan-input", "name-input", "target-input", "packunits-input"].some((c) => e.target.classList.contains(c))) recalc();
+    });
+    cardEl.addEventListener("change", (e) => {
+      if (e.target.classList.contains("format-select")) {
+        const row = e.target.closest(".deal-row");
+        const pu = row.querySelector(".packunits-input");
+        // switching to multipack: start from a sensible pack size rather than the carton count
+        if (e.target.value === "multipack" && (parseFloat(pu.value) || 0) >= (sku.unitsPerCarton || 16)) pu.value = 4;
+        recalc();
+      }
     });
     cardEl.addEventListener("click", (e) => {
       if (e.target.classList.contains("deal-expand-btn")) {
@@ -909,9 +957,17 @@ const App = (function () {
     cardEl.querySelector(".add-deal-type-select").addEventListener("change", (e) => {
       const dtId = e.target.value;
       if (!dtId) return;
-      const dt = (banner.dealTypes || []).find((d) => d.id === dtId);
-      if (!dt) return;
-      cardEl._deals.push({ dealTypeId: dt.id, label: dt.label, dealType: dt.dealType, shelfRRP: 0, discountPerCarton: 0, scanDeal: 0, packQty: dt.defaultPackQty });
+      const terms = latestBannerTerms(banner.id, period);
+      let nd;
+      if (dtId === "__custom") {
+        nd = { dealTypeId: "custom-" + uid(), label: "New deal", dealType: "promo", packFormat: "multipack", packUnits: 4, packQty: packQtyFor(sku, "multipack", 4), shelfRRP: 0, discountPerCarton: 0, scanDeal: 0, targetPct: null };
+      } else {
+        const dt = (banner.dealTypes || []).find((d) => d.id === dtId);
+        if (!dt) return;
+        const fmt = dt.packType === "carton" ? "carton" : "multipack";
+        nd = { dealTypeId: dt.id, label: dt.label, dealType: dt.dealType, packFormat: fmt, packUnits: 4, packQty: dt.defaultPackQty, shelfRRP: 0, discountPerCarton: 0, scanDeal: 0, targetPct: targetMarginForDealType(terms, dt.id) };
+      }
+      cardEl._deals.push(nd);
       e.target.value = "";
       rerenderDealRows(cardEl, sku, banner, period);
     });
@@ -1568,9 +1624,9 @@ const App = (function () {
       };
     }
     const dt = (banner.dealTypes || []).find((d) => d.id === entry.dealTypeId);
-    const label = dt ? dt.label : "(deal type removed)";
     const pr = latestPricing(sku.id, banner.id, null); // always the latest period — this is what makes it "live"
     const dealRow = pr ? pr.deals.find((d) => d.dealTypeId === entry.dealTypeId) : null;
+    const label = (dealRow && dealRow.label) || (dt ? dt.label : "(deal removed)");
     if (!pr || !dealRow) {
       return { promoName: label, targetMarginPct: null, actualMarginPct: null, linked: true, pending: true };
     }
@@ -1583,6 +1639,7 @@ const App = (function () {
       listPrice: pr.listPrice,
       shelfRRP: dealRow.shelfRRP,
       scanDeal: dealRow.scanDeal || 0,
+      packFormat: dealPackFormat(banner, dealRow),
       ymNetDeal: m.ymNetDeal,
       profit: m.profit,
       gpPct: m.gpPct,
@@ -1657,6 +1714,7 @@ const App = (function () {
       </div>
       <div id="pg-grid-view">
         <div class="pg-legend">
+          <span><i class="pg-swatch pg-sgl"></i>Single</span>
           <span><i class="pg-swatch pg-mpk"></i>Multipack</span>
           <span><i class="pg-swatch pg-car"></i>Carton</span>
           <span><i class="pg-swatch pg-oth"></i>Other mechanic</span>
@@ -1697,8 +1755,11 @@ const App = (function () {
       let kind = "oth",
         tag = "";
       const uom = /UOM:\s*(\w+)/i.exec(notes);
-      const t1 = hint + " " + (uom ? uom[1] : "");
-      if (/multipack|mpk|pack/i.test(t1)) {
+      const t1 = (d.linked && disp.packFormat ? disp.packFormat : hint) + " " + (uom ? uom[1] : "");
+      if (/single/i.test(t1)) {
+        kind = "sgl";
+        tag = "SGL";
+      } else if (/multipack|mpk|pack/i.test(t1)) {
         kind = "mpk";
         tag = "MPK";
       } else if (/carton|ctn/i.test(t1)) {
@@ -1727,10 +1788,24 @@ const App = (function () {
       if (scan == null && !d.linked) scan = pgMoney(/scan[^$|]*\$([\d.]+)/i, notes);
       const flagText = /catalog/i.test(name + " " + notes) ? "Catalogue" : /off[\s-]?location/i.test(name + " " + notes) ? "Off location" : "";
       const noteShow = notes && notes.length <= 70 && !/^UOM:|^Placeholder from/i.test(notes) ? notes : "";
-      return { d, disp, kind, tag, price, priceFromName, scan, flagText, noteShow, name };
+      const stats = disp.actualMarginPct != null ? `${fmtPct(disp.actualMarginPct)}${disp.targetMarginPct != null ? " / " + fmtPct(disp.targetMarginPct) : ""}` : disp.targetMarginPct != null ? `tgt ${fmtPct(disp.targetMarginPct)}` : "";
+      return { d, disp, kind, tag, price, priceFromName, scan, flagText, noteShow, name, stats };
     }
+    function pgOverlap(s1, e1, s2, e2) {
+      const a = s1 > s2 ? s1 : s2,
+        b = e1 < e2 ? e1 : e2;
+      return Math.max(calDiffDays(a, b) + 1, 0);
+    }
+    // Columns come from the banner's official promo calendar when there is
+    // one (e.g. Star Liquor's fortnightly P-periods); otherwise they're built
+    // from the deals' own dates (start/end within 3 days share a column).
     function pgColumns(deals) {
+      const defined = banner.promoPeriods || (window.BANNER_CALENDARS || {})[banner.id];
       const cols = [];
+      if (defined) {
+        defined.forEach((p) => cols.push({ start: calParseDate(p.start), end: calParseDate(p.end), label: p.id, note: p.note || "", beer: !!p.beer, deals: [] }));
+      }
+      const extra = [];
       deals
         .slice()
         .sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : a.endDate < b.endDate ? -1 : 1))
@@ -1738,14 +1813,39 @@ const App = (function () {
           const s = calParseDate(d.startDate),
             e = calParseDate(d.endDate);
           if (!calIsSaneDate(s) || !calIsSaneDate(e)) return;
-          let col = cols.find((c) => Math.abs(calDiffDays(c.start, s)) <= 3 && Math.abs(calDiffDays(c.end, e)) <= 3);
+          if (defined && cols.some((c) => pgOverlap(s, e, c.start, c.end) > 0)) return;
+          let col = extra.find((c) => Math.abs(calDiffDays(c.start, s)) <= 3 && Math.abs(calDiffDays(c.end, e)) <= 3);
           if (!col) {
-            col = { start: s, end: e, deals: [] };
-            cols.push(col);
+            col = { start: s, end: e, label: "", note: "", beer: false, deals: [] };
+            extra.push(col);
           }
-          col.deals.push(d);
         });
-      return cols.sort((a, b) => a.start - b.start);
+      return cols.concat(extra).sort((a, b) => a.start - b.start);
+    }
+    function pgSpan(d, cols) {
+      const s = calParseDate(d.startDate),
+        e = calParseDate(d.endDate);
+      const len = calDiffDays(s, e) + 1;
+      const need = Math.min(4, len);
+      let idxs = [];
+      cols.forEach((c, i) => {
+        const o = pgOverlap(s, e, c.start, c.end);
+        if (o >= need) idxs.push(i);
+      });
+      if (!idxs.length) {
+        let best = -1,
+          bo = 0;
+        cols.forEach((c, i) => {
+          const o = pgOverlap(s, e, c.start, c.end);
+          if (o > bo) {
+            bo = o;
+            best = i;
+          }
+        });
+        if (best < 0) return null;
+        idxs = [best];
+      }
+      return [idxs[0], idxs[idxs.length - 1]];
     }
     function pgRangeLabel(s, e) {
       const sm = s.toLocaleDateString(undefined, { month: "short" }),
@@ -1756,15 +1856,14 @@ const App = (function () {
       const wrap = document.getElementById("pg-grid-wrap");
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      let deals = calFilteredDeals().filter((d) => {
+      const winStart = calState.range === "upcoming" ? calAddDays(today, -7) : calState.range === "past" ? new Date(2000, 0, 1) : new Date(2000, 0, 1);
+      const winEnd = calState.range === "upcoming" ? calAddDays(today, 190) : calState.range === "past" ? calAddDays(today, -1) : new Date(2100, 0, 1);
+      const deals = calFilteredDeals().filter((d) => {
         const s = calParseDate(d.startDate),
           e = calParseDate(d.endDate);
-        if (!calIsSaneDate(s) || !calIsSaneDate(e)) return false;
-        if (calState.range === "upcoming") return e >= calAddDays(today, -7) && s <= calAddDays(today, 190);
-        if (calState.range === "past") return e < today;
-        return true;
+        return calIsSaneDate(s) && calIsSaneDate(e) && e >= winStart && s <= winEnd;
       });
-      const cols = pgColumns(deals);
+      let cols = pgColumns(deals).filter((c) => c.end >= winStart && c.start <= winEnd);
       if (cols.length === 0) {
         wrap.innerHTML = '<p class="muted" style="padding:24px;text-align:center;">No promos in this window. Use "+ Add deal", or switch the date range.</p>';
         return;
@@ -1775,39 +1874,64 @@ const App = (function () {
         if (skuIds.indexOf(s.id) === -1 && latestPricing(s.id, banner.id, null) && (calState.filters.skuId === "all" || calState.filters.skuId === s.id)) skuIds.push(s.id);
       });
       const skus = calOrderedSkus().filter((s) => skuIds.indexOf(s.id) !== -1);
-      let html = `<div class="pg-grid" style="grid-template-columns:150px repeat(${cols.length}, minmax(136px, 1fr));">`;
-      html += '<div class="pg-corner">SKU</div>';
-      cols.forEach((c) => {
+      const N = cols.length;
+      let html = `<div class="pg-grid" style="grid-template-columns:128px repeat(${N}, minmax(86px, 1fr));">`;
+      html += '<div class="pg-corner" style="grid-row:1;grid-column:1;">SKU</div>';
+      cols.forEach((c, i) => {
         const isNow = c.start <= today && c.end >= today;
-        const cyc = {};
-        c.deals.forEach((d) => d.cycleInstance && (cyc[d.cycleInstance] = (cyc[d.cycleInstance] || 0) + 1));
-        const cycLabel = Object.keys(cyc).sort((a, b) => cyc[b] - cyc[a])[0] || "";
-        const month = c.start.toLocaleDateString(undefined, { month: "long" }).toUpperCase();
-        html += `<div class="pg-colhead${isNow ? " pg-now" : ""}"><div class="pg-cyc">${esc(cycLabel) || "&nbsp;"}</div><div class="pg-dates">${pgRangeLabel(c.start, c.end)}</div><div class="pg-month">${month}${isNow ? " · NOW" : ""}</div></div>`;
+        let cycLabel = c.label;
+        if (!cycLabel) {
+          const cyc = {};
+          deals.forEach((d) => pgOverlap(calParseDate(d.startDate), calParseDate(d.endDate), c.start, c.end) > 0 && d.cycleInstance && (cyc[d.cycleInstance] = (cyc[d.cycleInstance] || 0) + 1));
+          cycLabel = Object.keys(cyc).sort((a, b) => cyc[b] - cyc[a])[0] || "";
+        }
+        const month = c.note ? c.note.toUpperCase() : c.start.toLocaleDateString(undefined, { month: "long" }).toUpperCase();
+        html += `<div class="pg-colhead${isNow ? " pg-now" : ""}${c.beer ? " pg-beer" : ""}" style="grid-row:1;grid-column:${i + 2};"><div class="pg-cyc">${esc(cycLabel) || "&nbsp;"}${c.beer ? ' <span class="pg-beertag">BEER</span>' : ""}</div><div class="pg-dates">${pgRangeLabel(c.start, c.end)}</div><div class="pg-month">${esc(month)}${isNow ? " · NOW" : ""}</div></div>`;
       });
+      let row = 2;
       skus.forEach((sku) => {
-        html += `<div class="pg-skucell"><div class="pg-skuname">${esc(sku.name)}</div><div class="pg-skusub">${esc(sku.style || "")}${sku.style && sku.packFormat ? " · " : ""}${esc(sku.packFormat || "")}</div></div>`;
-        cols.forEach((c, ci) => {
-          const cellDeals = c.deals.filter((d) => d.skuId === sku.id).map(pgDeal);
-          if (cellDeals.length === 0) {
-            html += `<div class="pg-cell pg-emptycell" data-add-sku="${sku.id}" data-col="${ci}" title="Add a deal for ${esc(sku.name)} in this period"><span>+</span></div>`;
-            return;
+        const items = [];
+        deals
+          .filter((d) => d.skuId === sku.id)
+          .forEach((d) => {
+            const sp = pgSpan(d, cols);
+            if (sp) items.push({ p: pgDeal(d), c0: sp[0], c1: sp[1] });
+          });
+        items.sort((a, b) => a.c0 - b.c0 || b.c1 - a.c1);
+        const lanes = [];
+        items.forEach((it) => {
+          let lane = lanes.find((l) => l[l.length - 1].c1 < it.c0);
+          if (!lane) {
+            lane = [];
+            lanes.push(lane);
           }
-          html += '<div class="pg-cell">';
-          cellDeals.forEach((p) => {
+          lane.push(it);
+        });
+        if (!lanes.length) lanes.push([]);
+        html += `<div class="pg-skucell" style="grid-row:${row} / span ${lanes.length};grid-column:1;"><div class="pg-skuname">${esc(sku.name)}</div><div class="pg-skusub">${esc(sku.style || "")}${sku.style && sku.packFormat ? " · " : ""}${esc(sku.packFormat || "")}</div></div>`;
+        lanes.forEach((lane, li) => {
+          const r = row + li;
+          let covered = new Array(N).fill(false);
+          lane.forEach((it) => {
+            for (let c = it.c0; c <= it.c1; c++) covered[c] = true;
+            const p = it.p;
             const ms = calMarginStatus(p.disp);
-            const tip = `${p.name}${p.d.linked ? " (live-linked)" : ""}\n${p.d.startDate} → ${p.d.endDate} · ${p.d.status}${p.d.notes ? "\n" + p.d.notes : ""}`;
-            html += `<div class="pg-deal pg-${p.kind}${p.flagText ? " pg-flag" : ""} pg-st-${p.d.status}" data-deal="${p.d.id}" title="${esc(tip)}">
+            const tip = `${p.name}${p.d.linked ? " (live-linked)" : ""}\n${p.d.startDate} → ${p.d.endDate} · ${p.d.status}${p.stats ? "\nMargin / target: " + p.stats : ""}${p.d.notes ? "\n" + p.d.notes : ""}`;
+            html += `<div class="pg-deal pg-${p.kind}${p.flagText ? " pg-flag" : ""} pg-st-${p.d.status}" style="grid-row:${r};grid-column:${it.c0 + 2} / span ${it.c1 - it.c0 + 1};" data-deal="${p.d.id}" title="${esc(tip)}">
               <div class="pg-tagrow"><span class="pg-tag">${p.tag}${p.d.status !== "planned" ? (p.tag ? " · " : "") + p.d.status.toUpperCase() : ""}</span><span class="pg-dot" style="background:${calMarginColor(ms)}"></span></div>
               ${p.price != null ? `<div class="pg-price">${fmt$(p.price)}</div>` : `<div class="pg-price pg-price-text">${esc(p.name)}</div>`}
               ${p.scan ? `<div class="pg-scan">${fmt$(p.scan)} scan</div>` : ""}
-              ${p.price != null && !p.priceFromName && !p.d.linked && p.name ? `<div class="pg-name">${esc(p.name)}</div>` : ""}
+              ${p.price != null && !p.priceFromName && p.name ? `<div class="pg-name">${esc(p.name)}</div>` : ""}
+              ${p.stats ? `<div class="pg-stats pg-stats-${ms}">${p.stats}</div>` : ""}
               ${p.noteShow ? `<div class="pg-note">${esc(p.noteShow)}</div>` : ""}
               ${p.flagText ? `<div class="pg-flagtext">${p.flagText}</div>` : ""}
             </div>`;
           });
-          html += "</div>";
+          for (let c = 0; c < N; c++) {
+            if (!covered[c]) html += `<div class="pg-cell pg-emptycell" style="grid-row:${r};grid-column:${c + 2};" data-add-sku="${sku.id}" data-col="${c}" title="Add a deal for ${esc(sku.name)} in this period"><span>+</span></div>`;
+          }
         });
+        row += lanes.length;
       });
       html += "</div>";
       wrap.innerHTML = html;
@@ -1815,7 +1939,7 @@ const App = (function () {
       wrap.querySelectorAll(".pg-emptycell").forEach((el) =>
         el.addEventListener("click", () => {
           const c = cols[parseInt(el.dataset.col, 10)];
-          calOpenDealModal(null, banner.id, el.dataset.addSku, { startDate: calFmtDate(c.start), endDate: calFmtDate(c.end) });
+          calOpenDealModal(null, banner.id, el.dataset.addSku, { startDate: calFmtDate(c.start), endDate: calFmtDate(c.end), cycleInstance: c.label || "" });
         })
       );
     }
@@ -1939,7 +2063,16 @@ const App = (function () {
         const skuOptions = calOrderedSkus()
           .map((s) => `<option value="${s.id}" ${s.id === d.skuId ? "selected" : ""}>${esc(s.name)} — ${esc(s.packFormat || "")}</option>`)
           .join("");
-        const dealTypeOptions = (banner.dealTypes || [])
+        const dealOptionsFor = (bId, sId) => {
+          const pr = latestPricing(sId, bId, null);
+          const list = pr && pr.deals.length ? pr.deals.map((x) => ({ id: x.dealTypeId, label: `${x.label || "Deal"} · ${(PACK_FORMATS.find((f) => f.id === dealPackFormat(bannerById(bId), x)) || {}).label || ""}${x.shelfRRP ? " · " + fmt$(x.shelfRRP) : ""}` })) : ((bannerById(bId) || {}).dealTypes || []).map((dt) => ({ id: dt.id, label: dt.label }));
+          return list;
+        };
+        if (d.linked && !d.dealTypeId) {
+          const first = dealOptionsFor(d.bannerId, d.skuId)[0];
+          if (first) d.dealTypeId = first.id;
+        }
+        const dealTypeOptions = dealOptionsFor(d.bannerId, d.skuId)
           .map((dt) => `<option value="${dt.id}" ${dt.id === d.dealTypeId ? "selected" : ""}>${esc(dt.label)}</option>`)
           .join("");
         modalRoot.innerHTML = `
@@ -1954,8 +2087,8 @@ const App = (function () {
               Link to this SKU's pricing sheet <span class="muted small">(recommended — promo name, target % and actual % all stay live)</span>
             </label>
             <div id="cd-linked-fields" style="display:${d.linked ? "" : "none"};">
-              <label>Deal type</label>
-              <select id="cd-dealtype" class="select">${dealTypeOptions || '<option value="">No deal types configured for this banner yet</option>'}</select>
+              <label>Deal <span class="muted small">(built on this SKU's card on the banner page)</span></label>
+              <select id="cd-dealtype" class="select">${dealTypeOptions || '<option value="">No deals on this SKU yet — add one on its pricing card</option>'}</select>
               <div class="muted small" id="cd-linked-preview" style="margin-top:6px;"></div>
             </div>
             <div id="cd-manual-fields" style="display:${d.linked ? "none" : ""};">
@@ -1991,14 +2124,14 @@ const App = (function () {
           const preview = document.getElementById("cd-linked-preview");
           if (!preview) return;
           if (!b || !s || !dtId) {
-            preview.textContent = "Pick a banner, SKU and deal type to preview live figures.";
+            preview.textContent = "Pick a banner, SKU and deal to preview live figures.";
             return;
           }
           const disp = calDealDisplay({ linked: true, bannerId: b.id, skuId: s.id, dealTypeId: dtId });
           if (disp.pending) {
             preview.innerHTML = `<span style="color:var(--accent-warm-dark);">No price is set for "${esc(disp.promoName)}" on ${esc(s.name)} at ${esc(b.name)} yet — set it on the banner page, or link it anyway and come back once it's priced.</span>`;
           } else {
-            preview.innerHTML = `= <b>${esc(disp.promoName)}</b> · Target ${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "not set"} · Actual ${disp.actualMarginPct != null ? fmtPct(disp.actualMarginPct) : "—"}`;
+            preview.innerHTML = `= <b>${esc(disp.promoName)}</b> · ${fmt$(disp.shelfRRP)}${disp.scanDeal ? " · " + fmt$(disp.scanDeal) + " scan" : ""} · Margin ${disp.actualMarginPct != null ? fmtPct(disp.actualMarginPct) : "—"} vs target ${disp.targetMarginPct != null ? fmtPct(disp.targetMarginPct) : "not set"}`;
           }
         }
 
@@ -2009,6 +2142,8 @@ const App = (function () {
         });
         document.getElementById("cd-sku").addEventListener("change", (e) => {
           d.skuId = e.target.value;
+          const opts = dealOptionsFor(document.getElementById("cd-banner").value, d.skuId);
+          document.getElementById("cd-dealtype").innerHTML = opts.map((o) => `<option value="${o.id}">${esc(o.label)}</option>`).join("") || '<option value="">No deals on this SKU yet — add one on its pricing card</option>';
           updateLinkedPreview();
         });
         document.getElementById("cd-linked").addEventListener("change", (e) => {
@@ -2062,7 +2197,7 @@ const App = (function () {
           if (linked) {
             const dealTypeId = document.getElementById("cd-dealtype").value;
             if (!dealTypeId) {
-              alert("Pick a deal type, or untick “Link to this SKU's pricing sheet” to enter a manual promo name.");
+              alert("Pick a deal, or untick “Link to this SKU's pricing sheet” to enter a manual promo name.");
               return;
             }
             newDeal.dealTypeId = dealTypeId;

@@ -245,6 +245,13 @@ Endeavour / Coles / Independents). Each tab contains, top to bottom:
   that SKU in that period. It's per-banner — there's no shared timeline any
   more. A **Next 6 months / Past / All dates** selector controls the window
   and a **Table** toggle gives a sortable spreadsheet view (with Notes).
+  About 6 months of fortnightly periods fit on screen at once. Star Liquor
+  uses its official P-period calendar (js/banner-calendars.js, from the 2026
+  SLG Slotting Board); deals span the periods they cover.
+- **Deal builder** — under each SKU card, every deal has its own name, format
+  (Single / Multipack / Carton, with units per pack), Shelf RRP, discount,
+  scan and Target %. Linked calendar deals pick one of these deals and show
+  its price, scan and margin vs target on the timeline.
 - **Pricing & deals** — the per-SKU cards (Shelf RRP, Discount, Scan,
   margin vs target) for ranged SKUs, then Banner terms and Target margins.
 
