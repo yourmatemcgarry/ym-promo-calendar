@@ -696,7 +696,7 @@ const App = (function () {
 
     main.innerHTML = `
       <div class="page-header">
-        <h1>${badgeHTML(banner, "lg")}${esc(banner.name)}</h1>
+        <h1>${badgeHTML(banner, "lg")}${esc(banner.name)}${banner.ownerBannerId ? ` <span class="muted small" style="font-weight:500;">owned by ${esc((State.banners.find((x) => x.id === banner.ownerBannerId) || {}).name || "")}</span>` : ""}</h1>
         <div class="period-control">Viewing: ${periodSelectorHTML(period)}</div>
       </div>
 
@@ -2397,6 +2397,7 @@ const App = (function () {
   async function boot() {
     await DB.open();
     await DB.seedIfEmpty();
+    await DB.applySeedAdditions();
     const [skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, distributorPricing, periods, currentPeriod] = await Promise.all([
       DB.getAll("skus"),
       DB.getAll("cogsHistory"),

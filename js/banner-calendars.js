@@ -187,3 +187,4 @@ window.BANNER_CALENDARS = {
   }
  ]
 };
+window.BANNER_CALENDARS["sense-of-taste"] = window.BANNER_CALENDARS["star-liquor"]; // owned by Star Liquor — same fortnightly periods

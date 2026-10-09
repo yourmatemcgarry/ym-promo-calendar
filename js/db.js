@@ -171,8 +171,28 @@ const DB = (function () {
     }
     await setMeta("periods", data.periods);
     await setMeta("currentPeriod", data.currentPeriod);
+    await setMeta("seedAdditionsApplied", []);
     await setMeta("seeded", true);
     return true;
+  }
+
+  /** One-time additions for databases created before a banner existed in the seed. */
+  async function applySeedAdditions() {
+    const add = window.SEED_ADDITIONS;
+    if (!add) return;
+    const done = (await getMeta("seedAdditionsApplied")) || [];
+    const existing = await getAll("banners");
+    let changed = false;
+    for (const b of add.banners || []) {
+      if (done.indexOf(b.id) !== -1) continue;
+      if (!existing.some((x) => x.id === b.id)) {
+        await put("banners", b);
+        await putMany("bannerTermsHistory", (add.bannerTermsHistory || []).filter((t) => t.bannerId === b.id).map((t) => Object.assign({}, t)));
+      }
+      done.push(b.id);
+      changed = true;
+    }
+    if (changed) await setMeta("seedAdditionsApplied", done);
   }
 
   async function exportAll() {
@@ -242,6 +262,7 @@ const DB = (function () {
     getMeta,
     setMeta,
     seedIfEmpty,
+    applySeedAdditions,
     exportAll,
     importAll,
   };
