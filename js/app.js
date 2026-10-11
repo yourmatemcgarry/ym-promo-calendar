@@ -273,7 +273,7 @@ const App = (function () {
   // ------------------------------------------------------------- Dashboard
   // Dashboard content removed for now (it was confusing); land on the first banner instead.
   route("dashboard", async () => {
-    navigate("#/banner/" + (State.banners[0] ? State.banners[0].id : "") );
+    navigate(visibleBanners()[0] ? "#/banner/" + visibleBanners()[0].id : "#/banners");
   });
 
   // ------------------------------------------------------------ COGS Master
@@ -1274,7 +1274,7 @@ const App = (function () {
           .map(
             ({ banner, pricing, everydayDeal, m }) => `<tr>
           <td><a href="#/banner/${banner.groupId}/${banner.id}">${badgeHTML(banner, "sm")}${esc(banner.name)}</a></td>
-          <td>${esc(State.bannerGroups.find((g) => g.id === banner.groupId).shortName)}</td>
+          <td>${esc(((State.bannerGroups.find((g) => g.id === banner.groupId) || {}).shortName) || "")}</td>
           <td>${esc(everydayDeal.label)}</td>
           <td>${fmt$(m.listPrice)}</td>
           <td>${fmt$(everydayDeal.shelfRRP)}</td>
@@ -2362,7 +2362,7 @@ const App = (function () {
 
   // The old shared calendar is gone — send old links to the first banner.
   route("calendar", async () => {
-    navigate("#/banner/" + (State.banners[0] ? State.banners[0].id : ""));
+    navigate(visibleBanners()[0] ? "#/banner/" + visibleBanners()[0].id : "#/banners");
   });
 
 
@@ -2427,6 +2427,166 @@ const App = (function () {
     };
   });
 
+  // ------------------------------------------------------ Banner management
+  function visibleBanners() {
+    return State.banners.filter((b) => !b.hidden && !(State.bannerGroups.find((g) => g.id === b.groupId) || {}).hidden);
+  }
+  function refreshBannerNav() {
+    const nav = document.getElementById("banner-nav");
+    if (!nav) return;
+    nav.innerHTML = State.bannerGroups
+      .filter((g) => !g.hidden)
+      .map((g) => {
+        const bs = State.banners.filter((b) => b.groupId === g.id && !b.hidden);
+        if (!bs.length) return "";
+        return `<span class="bn-group"><span class="bn-group-label">${esc(g.shortName || g.name)}</span>${bs.map((b) => `<a class="banner-tab" data-banner="${b.id}" href="#/banner/${b.id}">${esc(b.name)}</a>`).join("")}</span>`;
+      })
+      .join("");
+  }
+  route("banners", async (rest, main) => {
+    const draw = () => {
+      main.innerHTML = `
+        <div class="page-head"><h1>Banner groups &amp; banners</h1>
+          <p class="muted">Add, rename, hide or remove banner groups and the banners inside them. Hidden items disappear from the top tabs but keep all their data.</p></div>
+        <div class="card"><div class="card-header-row"><h3>Add</h3></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input type="text" id="bm-newgroup" placeholder="New banner group name" style="width:240px;"><button class="btn-sm" id="bm-addgroup">+ Add group</button>
+          </div></div>
+        ${State.bannerGroups
+          .map((g) => {
+            const bs = State.banners.filter((b) => b.groupId === g.id);
+            return `<div class="card" data-group="${g.id}" style="${g.hidden ? "opacity:.6;" : ""}">
+              <div class="card-header-row">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${badgeHTML(g)}
+                  <input type="text" class="bm-gname" value="${esc(g.name)}" style="width:210px;font-weight:700;" title="Group name">
+                  <input type="text" class="bm-gshort" value="${esc(g.shortName || "")}" style="width:210px;" title="Short name shown on the tabs">
+                  <input type="color" class="bm-gcolor" value="${esc(g.badgeColor || "#0f7d74")}" title="Colour">
+                </div>
+                <div><button class="btn-sm bm-ghide">${g.hidden ? "Show" : "Hide"}</button> <button class="btn-sm bm-gdel">Delete</button></div>
+              </div>
+              <table class="table table-compact"><thead><tr><th>Banner</th><th>Group</th><th></th></tr></thead><tbody>
+                ${bs
+                  .map(
+                    (b) => `<tr data-banner="${b.id}" style="${b.hidden ? "opacity:.55;" : ""}"><td>${badgeHTML(b, "sm")}<input type="text" class="bm-bname" value="${esc(b.name)}" style="width:220px;"></td>
+                  <td><select class="bm-bgroup">${State.bannerGroups.map((x) => `<option value="${x.id}" ${x.id === b.groupId ? "selected" : ""}>${esc(x.shortName || x.name)}</option>`).join("")}</select></td>
+                  <td><a class="btn-sm" href="#/banner/${b.id}">Open</a> <button class="btn-sm bm-bhide">${b.hidden ? "Show" : "Hide"}</button> <button class="btn-sm bm-bdel">Delete</button></td></tr>`
+                  )
+                  .join("") || '<tr><td colspan="3" class="muted">No banners in this group.</td></tr>'}
+              </tbody></table>
+              <div style="margin-top:8px;display:flex;gap:8px;"><input type="text" class="bm-newbanner" placeholder="New banner name" style="width:220px;"><button class="btn-sm bm-addbanner">+ Add banner</button></div>
+            </div>`;
+          })
+          .join("")}`;
+      wire();
+    };
+    const persistNav = () => refreshBannerNav();
+    const wire = () => {
+      main.querySelector("#bm-addgroup").onclick = async () => {
+        const name = main.querySelector("#bm-newgroup").value.trim();
+        if (!name) return;
+        const g = { id: slugify(name) + "-" + uid().slice(0, 4), name, shortName: name, badgeColor: "#6b7f8a", badgeInitials: name.slice(0, 2).toUpperCase() };
+        State.bannerGroups.push(g);
+        await DB.put("bannerGroups", g);
+        persistNav();
+        draw();
+      };
+      main.querySelectorAll("[data-group]").forEach((card) => {
+        const g = State.bannerGroups.find((x) => x.id === card.dataset.group);
+        const save = async () => {
+          await DB.put("bannerGroups", g);
+          persistNav();
+        };
+        card.querySelector(".bm-gname").oninput = (e) => {
+          g.name = e.target.value;
+          g.badgeInitials = (g.name || "??").slice(0, 2).toUpperCase();
+          save();
+        };
+        card.querySelector(".bm-gshort").oninput = (e) => {
+          g.shortName = e.target.value;
+          save();
+        };
+        card.querySelector(".bm-gcolor").oninput = (e) => {
+          g.badgeColor = e.target.value;
+          save();
+        };
+        card.querySelector(".bm-ghide").onclick = async () => {
+          g.hidden = !g.hidden;
+          await save();
+          draw();
+        };
+        card.querySelector(".bm-gdel").onclick = async () => {
+          if (State.banners.some((b) => b.groupId === g.id)) return alert("This group still has banners. Move them to another group (or delete them) first — or use Hide to just remove it from the tabs.");
+          if (!confirm(`Delete group "${g.name}"?`)) return;
+          State.bannerGroups = State.bannerGroups.filter((x) => x.id !== g.id);
+          await DB.remove("bannerGroups", g.id);
+          persistNav();
+          draw();
+        };
+        card.querySelector(".bm-addbanner").onclick = async () => {
+          const inp = card.querySelector(".bm-newbanner");
+          const name = inp.value.trim();
+          if (!name) return;
+          const b = {
+            id: slugify(name) + "-" + uid().slice(0, 4),
+            name,
+            groupId: g.id,
+            distributor: "Direct",
+            dealTypes: [
+              { id: "everyday-mp", label: "Everyday (Multipack)", packType: "multipack", dealType: "everyday", defaultPackQty: 4 },
+              { id: "everyday-ctn", label: "Everyday (Carton)", packType: "carton", dealType: "everyday", defaultPackQty: 1 },
+              { id: "promo-mp", label: "Promo (Multipack)", packType: "multipack", dealType: "promo", defaultPackQty: 4 },
+              { id: "promo-ctn", label: "Promo (Carton)", packType: "carton", dealType: "promo", defaultPackQty: 1 },
+            ],
+            badgeColor: g.badgeColor,
+            badgeInitials: name.slice(0, 2).toUpperCase(),
+          };
+          const terms = { bannerId: b.id, period: State.currentPeriod, distributor: "Direct", feeWaterfall: [], targetMargins: [], distributorFeePct: 0, freightPct: 0, directDeliveryPct: 0, kegCollectionPct: 0, pickFeePerCarton: 0 };
+          State.banners.push(b);
+          await DB.put("banners", b);
+          await DB.put("bannerTermsHistory", terms);
+          State.bannerTermsHistory = await DB.getAll("bannerTermsHistory");
+          persistNav();
+          draw();
+        };
+      });
+      main.querySelectorAll("tr[data-banner]").forEach((tr) => {
+        const b = State.banners.find((x) => x.id === tr.dataset.banner);
+        tr.querySelector(".bm-bname").oninput = async (e) => {
+          b.name = e.target.value;
+          await DB.put("banners", b);
+          persistNav();
+        };
+        tr.querySelector(".bm-bgroup").onchange = async (e) => {
+          b.groupId = e.target.value;
+          await DB.put("banners", b);
+          persistNav();
+          draw();
+        };
+        tr.querySelector(".bm-bhide").onclick = async () => {
+          b.hidden = !b.hidden;
+          await DB.put("banners", b);
+          persistNav();
+          draw();
+        };
+        tr.querySelector(".bm-bdel").onclick = async () => {
+          const deals = State.calendarDeals.filter((d) => d.bannerId === b.id).length;
+          if (!confirm(`Permanently delete "${b.name}" along with its pricing, terms and ${deals} promo(s)? This can't be undone. (Use Hide to keep the data.)`)) return;
+          for (const r of State.pricingHistory.filter((r) => r.bannerId === b.id)) await DB.remove("pricingHistory", r.id);
+          for (const r of State.bannerTermsHistory.filter((r) => r.bannerId === b.id)) await DB.remove("bannerTermsHistory", r.id);
+          for (const r of State.calendarDeals.filter((r) => r.bannerId === b.id)) await DB.remove("calendarDeals", r.id);
+          await DB.remove("banners", b.id);
+          State.pricingHistory = State.pricingHistory.filter((r) => r.bannerId !== b.id);
+          State.bannerTermsHistory = State.bannerTermsHistory.filter((r) => r.bannerId !== b.id);
+          State.calendarDeals = State.calendarDeals.filter((r) => r.bannerId !== b.id);
+          State.banners = State.banners.filter((x) => x.id !== b.id);
+          persistNav();
+          draw();
+        };
+      });
+    };
+    draw();
+  });
+
   // ------------------------------------------------------------ Boot
   async function boot() {
     await DB.open();
@@ -2449,6 +2609,7 @@ const App = (function () {
 
     const nav = document.getElementById("nav-links");
     nav.innerHTML = `
+      <a class="nav-link" data-route="banners" href="#/banners">Banners</a>
       <a class="nav-link" data-route="cogs" href="#/cogs">COGS Master</a>
       <a class="nav-link" data-route="sku-tool" href="#/sku-tool">SKU Tool</a>
       <a class="nav-link" data-route="compare" href="#/compare">Compare SKUs</a>
@@ -2457,13 +2618,7 @@ const App = (function () {
       <a class="nav-link" data-route="data" href="#/data">Data &amp; Backup</a>
     `;
 
-    const bannerNav = document.getElementById("banner-nav");
-    bannerNav.innerHTML = State.bannerGroups
-      .map((g) => {
-        const bs = State.banners.filter((b) => b.groupId === g.id);
-        return `<span class="bn-group"><span class="bn-group-label">${esc(g.shortName)}</span>${bs.map((b) => `<a class="banner-tab" data-banner="${b.id}" href="#/banner/${b.id}">${esc(b.name)}</a>`).join("")}</span>`;
-      })
-      .join("");
+    refreshBannerNav();
     window.addEventListener("hashchange", onHashChange);
     onHashChange();
   }

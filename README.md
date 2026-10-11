@@ -357,3 +357,7 @@ BWS, Dan Murphy's, Liquorland, etc. are third-party trademarks, so this app
 doesn't scrape or embed them. If you'd like real retailer logos instead,
 supply the image files (or approved URLs) and they can be wired in the same
 way SKU photos are.
+
+
+## Banners page
+The **Banners** link in the top menu lets you add, rename, recolour, move, hide or delete banner groups and banners. Hidden items leave the top tabs but keep their data; a group can only be deleted once it has no banners.
