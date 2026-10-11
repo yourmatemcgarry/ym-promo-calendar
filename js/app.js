@@ -1574,6 +1574,10 @@ const App = (function () {
     if (!m) return iso || "";
     return `${parseInt(m[3], 10)}/${parseInt(m[2], 10)}/${short ? m[1].slice(2) : m[1]}`;
   }
+  function fmtDM(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+    return m ? `${parseInt(m[3], 10)}/${parseInt(m[2], 10)}` : iso || "";
+  }
   function calParseDate(s) {
     const p = s.split("-").map(Number);
     return new Date(p[0], p[1] - 1, p[2]);
@@ -1738,6 +1742,8 @@ const App = (function () {
           <button class="btn-sm" id="pg-today">Today</button>
           <button class="btn-sm" id="pg-next">Later ▶</button>
           <button class="btn-sm" id="pg-empty-toggle">Hide empty periods</button>
+          <label style="display:inline-flex;align-items:center;gap:6px;margin:0;width:auto;">Show <select id="pg-zoom" class="select" style="width:auto;"><option value="3">3 months</option><option value="6">6 months</option><option value="12">12 months</option></select></label>
+          <button class="btn-sm" id="pg-pdf-btn">Export PDF</button>
           <button class="btn-sm" id="pg-periods-btn">Promo periods…</button>
           <button class="btn-sm" id="pg-notes-toggle">Hide meeting notes</button>
           <span class="muted small">Showing ~6 months at a time — scroll sideways (or use the buttons) to see the past and future.</span>
@@ -1990,6 +1996,88 @@ const App = (function () {
       };
       draw();
     }
+    // ---- PDF export: opens a clean print view (Save as PDF in the print dialog) ----
+    function openPdfModal() {
+      const modalRoot = document.getElementById("modal-root");
+      const { cols } = calGridData();
+      if (!cols.length) return alert("Nothing to export yet.");
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      let ti = cols.findIndex((c) => c.end >= now);
+      if (ti < 0) ti = 0;
+      const from = calFmtDate(cols[ti].start);
+      const to = calFmtDate(cols[Math.min(cols.length - 1, ti + 12)].end);
+      modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal" style="max-width:520px;">
+        <h3>Export timeline as PDF — ${esc(banner.name)}</h3>
+        <p class="muted small">Opens a print-ready page. In the print dialog choose <strong>Save as PDF</strong> as the destination (landscape, background graphics on).</p>
+        <div class="grid-2"><div><label>From</label><input type="date" id="pdf-from" value="${from}"></div><div><label>To</label><input type="date" id="pdf-to" value="${to}"></div></div>
+        <label>Periods per page</label>
+        <select id="pdf-per" class="select"><option value="6">6 (about 3 months — A4, easiest to read)</option><option value="13">13 (about 6 months — A3)</option><option value="4">4 (large print)</option></select>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:10px;"><input type="checkbox" id="pdf-skip" style="width:auto;" checked> Leave out SKUs with no promos in the range</label>
+        <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="pdf-stats" style="width:auto;"> Include margin vs target <span class="muted small">(internal — leave off for sales)</span></label>
+        <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="pdf-notes" style="width:auto;"> Include meeting notes <span class="muted small">(internal)</span></label>
+        <div class="modal-actions"><div></div><div><button class="btn-secondary" id="pdf-cancel">Cancel</button> <button class="btn-primary" id="pdf-go">Open print view</button></div></div>
+      </div></div>`;
+      modalRoot.querySelector("#pdf-cancel").onclick = () => (modalRoot.innerHTML = "");
+      modalRoot.querySelector("#pdf-go").onclick = () => {
+        const q = (id) => modalRoot.querySelector(id);
+        const f = calParseDate(q("#pdf-from").value),
+          t = calParseDate(q("#pdf-to").value);
+        if (!calIsSaneDate(f) || !calIsSaneDate(t) || t < f) return alert("Check the From / To dates.");
+        const per = parseInt(q("#pdf-per").value, 10);
+        const opts = { stats: q("#pdf-stats").checked, notes: q("#pdf-notes").checked, skip: q("#pdf-skip").checked };
+        const w = window.open("", "_blank");
+        if (!w) return alert("The print view was blocked by your browser — allow pop-ups for this page and try again.");
+        buildPrintDoc(w, f, t, per, opts);
+        modalRoot.innerHTML = "";
+      };
+    }
+    function buildPrintDoc(w, from, to, per, opts) {
+      const { deals, cols, skus } = calGridData();
+      const sel = cols.filter((c) => c.end >= from && c.start <= to);
+      const pages = [];
+      for (let i = 0; i < sel.length; i += per) pages.push(sel.slice(i, i + per));
+      const hasDeal = (sku, pc) => deals.some((d) => d.skuId === sku.id && pc.some((c) => pgOverlap(calParseDate(d.startDate), calParseDate(d.endDate), c.start, c.end) > 0));
+      const anyDeal = (sku) => pages.some((pc) => hasDeal(sku, pc));
+      const useSkus = opts.skip ? skus.filter(anyDeal) : skus;
+      const big = per > 8;
+      const body = pages
+        .map((pc, i) => {
+          const dl = deals.filter((d) => pc.some((c) => pgOverlap(calParseDate(d.startDate), calParseDate(d.endDate), c.start, c.end) > 0));
+          const grid = gridHTML(pc, dl, useSkus, { template: `110px repeat(${pc.length}, minmax(0, 1fr))`, print: true, compact: per > 6, stats: opts.stats, notes: opts.notes });
+          return `<section class="pdf-page"><div class="pdf-head"><div><div class="pdf-title">Your Mates Brewing — ${esc(banner.name)} promo timeline</div>
+            <div class="pdf-sub">${fmtDMY(calFmtDate(pc[0].start))} to ${fmtDMY(calFmtDate(pc[pc.length - 1].end))} · page ${i + 1} of ${pages.length}</div></div>
+            <div class="pdf-sub">Printed ${fmtDMY(calFmtDate(new Date()))}</div></div>
+            <div class="pg-legend"><span><i class="pg-swatch pg-sgl"></i>Single</span><span><i class="pg-swatch pg-mpk"></i>Multipack</span><span><i class="pg-swatch pg-car"></i>Carton</span><span><i class="pg-swatch pg-oth"></i>Other</span><span><i class="pg-swatch pg-flagsw"></i>Catalogue / off-location</span></div>
+            ${grid}</section>`;
+        })
+        .join("");
+      const css = new URL("css/styles.css", window.location.href).href;
+      w.document.open();
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(banner.name)} promo timeline</title><link rel="stylesheet" href="${css}">
+        <style>
+          @page { size: ${big ? "A3" : "A4"} landscape; margin: 8mm; }
+          html, body { background:#fff; margin:0; }
+          body { padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .pdf-page { page-break-after: always; break-after: page; }
+          .pdf-page:last-child { page-break-after: auto; break-after: auto; }
+          .pdf-head { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:6px; }
+          .pdf-title { font-size:18px; font-weight:800; } .pdf-sub { font-size:11px; color:#555; }
+          .pg-grid.pg-print { width:100%; min-width:0; }
+          .pg-print .pg-skucell, .pg-print .pg-corner { position:static; }
+          .pg-print .pg-deal, .pg-print .pg-skucell { break-inside: avoid; }
+          .pg-notetext { font-size:11px; white-space:pre-wrap; padding:3px 4px; }
+          .pdf-bar { position:fixed; top:8px; right:8px; background:#0f7d74; color:#fff; padding:8px 12px; border-radius:8px; font:13px system-ui; cursor:pointer; }
+          @media print { .pdf-bar { display:none; } }
+        </style></head><body><div class="pdf-bar" onclick="window.print()">Print / Save as PDF</div>${body}</body></html>`);
+      w.document.close();
+      const go = () => setTimeout(() => w.print(), 400);
+      const link = w.document.querySelector("link");
+      if (link) {
+        link.onload = go;
+        link.onerror = go;
+      } else go();
+    }
     function updateNotesBtn() {
       const eb = document.getElementById("pg-empty-toggle");
       if (eb) eb.textContent = banner.hideEmptyPeriods ? "Show empty periods" : "Hide empty periods";
@@ -1998,10 +2086,7 @@ const App = (function () {
       const n = Object.keys(banner.plannerNotes || {}).length;
       btn.textContent = (banner.notesHidden ? "Show meeting notes" : "Hide meeting notes") + (n ? ` (${n})` : "");
     }
-    function calRenderGrid() {
-      const wrap = document.getElementById("pg-grid-wrap");
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    function calGridData() {
       const winStart = new Date(2000, 0, 1),
         winEnd = new Date(2100, 0, 1);
       const deals = calFilteredDeals().filter((d) => {
@@ -2018,25 +2103,22 @@ const App = (function () {
         });
         cols = cols.filter((c, i) => used.has(i));
       }
-      if (cols.length === 0) {
-        wrap.innerHTML = '<p class="muted" style="padding:24px;text-align:center;">No promos in this window. Use "+ Add deal", or switch the date range.</p>';
-        return;
-      }
       const skuIds = [];
       deals.forEach((d) => skuIds.indexOf(d.skuId) === -1 && skuIds.push(d.skuId));
       rangedSkus.forEach((s) => {
         if (skuIds.indexOf(s.id) === -1 && (calState.filters.skuId === "all" || calState.filters.skuId === s.id)) skuIds.push(s.id);
       });
       const skus = calOrderedSkus().filter((s) => skuIds.indexOf(s.id) !== -1);
+      return { deals, cols, skus };
+    }
+    function gridHTML(cols, deals, skus, opts) {
       const N = cols.length;
-      // Fixed column width sized so ~6 months fit in view; the rest scrolls sideways.
-      const avgDays = Math.max(7, cols.reduce((t, c) => t + calDiffDays(c.start, c.end) + 1, 0) / N);
-      const perView = Math.max(1, Math.round(183 / avgDays));
-      const availW = (wrap.clientWidth || 1300) - 128;
-      const colW = Math.max(86, Math.floor(availW / perView));
-      calState.colW = colW;
-      const prevScroll = calState.scrollLeft;
-      let html = `<div class="pg-grid" style="grid-template-columns:128px repeat(${N}, ${colW}px);">`;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const print = !!opts.print,
+        compact = !!opts.compact,
+        showStats = !print || opts.stats;
+      let html = `<div class="pg-grid${compact ? " pg-compact" : ""}${print ? " pg-print" : ""}" style="grid-template-columns:${opts.template};">`;
       html += '<div class="pg-corner" style="grid-row:1;grid-column:1;">SKU</div>';
       cols.forEach((c, i) => {
         const isNow = c.start <= today && c.end >= today;
@@ -2052,11 +2134,14 @@ const App = (function () {
       let row = 2;
       // Meeting-notes row: one editable note per period column, stored on the banner record.
       const notes = banner.plannerNotes || {};
-      if (!banner.notesHidden) {
+      const showNotes = print ? opts.notes && cols.some((c) => notes[calFmtDate(c.start)]) : !banner.notesHidden;
+      if (showNotes) {
         html += `<div class="pg-corner pg-notelabel" style="grid-row:2;grid-column:1;">MEETING NOTES<br><span class="muted small" style="letter-spacing:0;font-family:inherit;">with promo planners</span></div>`;
         cols.forEach((c, i) => {
           const key = calFmtDate(c.start);
-          html += `<div class="pg-notecell" style="grid-row:2;grid-column:${i + 2};"><textarea data-notekey="${key}" placeholder="Notes…" rows="3">${esc(notes[key] || "")}</textarea></div>`;
+          html += print
+            ? `<div class="pg-notecell" style="grid-row:2;grid-column:${i + 2};"><div class="pg-notetext">${esc(notes[key] || "")}</div></div>`
+            : `<div class="pg-notecell" style="grid-row:2;grid-column:${i + 2};"><textarea data-notekey="${key}" placeholder="Notes…" rows="3">${esc(notes[key] || "")}</textarea></div>`;
         });
         row = 3;
       }
@@ -2089,24 +2174,46 @@ const App = (function () {
             const ms = calMarginStatus(p.disp);
             const tip = `${p.name}${p.d.linked ? " (live-linked)" : ""}\n${fmtDMY(p.d.startDate)} → ${fmtDMY(p.d.endDate)} · ${p.d.status}${p.stats ? "\nMargin / target: " + p.stats : ""}${p.d.notes ? "\n" + p.d.notes : ""}`;
             html += `<div class="pg-deal pg-${p.kind}${p.flagText ? " pg-flag" : ""} pg-st-${p.d.status}" style="grid-row:${r};grid-column:${it.c0 + 2} / span ${it.c1 - it.c0 + 1};" data-deal="${p.d.id}" title="${esc(tip)}">
-              <div class="pg-tagrow"><span class="pg-tag">${p.d.status !== "planned" ? p.d.status.toUpperCase() : "&nbsp;"}</span><span class="pg-dot" style="background:${calMarginColor(ms)}"></span></div>
+              <div class="pg-tagrow"><span class="pg-tag">${p.d.status !== "planned" ? p.d.status.toUpperCase() : "&nbsp;"}</span>${showStats ? `<span class="pg-dot" style="background:${calMarginColor(ms)}"></span>` : ""}</div>
               <div class="pg-promoname">${esc(p.name)}</div>
               ${p.dealLabel ? `<div class="pg-dealname">${esc(p.dealLabel)}</div>` : ""}
               ${(p.price != null && !p.priceFromName) || p.tag ? `<div class="pg-pricerow">${p.price != null && !p.priceFromName ? `<span class="pg-price">${fmt$(p.price)}</span>` : ""}${p.tag ? `<span class="pg-tag pg-unit">${p.tag}</span>` : ""}</div>` : ""}
               ${p.scan ? `<div class="pg-scan">${fmt$(p.scan)} scan</div>` : ""}
-              ${p.stats ? `<div class="pg-stats pg-stats-${ms}">${p.stats}</div>` : ""}
-              <div class="pg-dates-line">${fmtDMY(p.d.startDate, true)} – ${fmtDMY(p.d.endDate, true)}</div>
+              ${p.stats && showStats ? `<div class="pg-stats pg-stats-${ms}">${p.stats}</div>` : ""}
+              <div class="pg-dates-line">${compact ? fmtDM(p.d.startDate) + "–" + fmtDM(p.d.endDate) : fmtDMY(p.d.startDate, true) + " – " + fmtDMY(p.d.endDate, true)}</div>
               ${p.noteShow ? `<div class="pg-note">${esc(p.noteShow)}</div>` : ""}
               ${p.flagText ? `<div class="pg-flagtext">${p.flagText}</div>` : ""}
             </div>`;
           });
           for (let c = 0; c < N; c++) {
-            if (!covered[c]) html += `<div class="pg-cell pg-emptycell" style="grid-row:${r};grid-column:${c + 2};" data-add-sku="${sku.id}" data-col="${c}" title="Add a deal for ${esc(sku.name)} in this period"><span>+</span></div>`;
+            if (!covered[c]) html += print ? `<div class="pg-cell" style="grid-row:${r};grid-column:${c + 2};"></div>` : `<div class="pg-cell pg-emptycell" style="grid-row:${r};grid-column:${c + 2};" data-add-sku="${sku.id}" data-col="${c}" title="Add a deal for ${esc(sku.name)} in this period"><span>+</span></div>`;
           }
         });
         row += lanes.length;
       });
       html += "</div>";
+      return html;
+    }
+    function calRenderGrid() {
+      const wrap = document.getElementById("pg-grid-wrap");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { deals, cols, skus } = calGridData();
+      if (cols.length === 0) {
+        wrap.innerHTML = '<p class="muted" style="padding:24px;text-align:center;">No promos in this window. Use "+ Add deal", or switch the date range.</p>';
+        return;
+      }
+      const N = cols.length;
+      // Fixed column width sized so the chosen number of months fit in view; the rest scrolls sideways.
+      const avgDays = Math.max(7, cols.reduce((t, c) => t + calDiffDays(c.start, c.end) + 1, 0) / N);
+      const months = banner.zoomMonths || 6;
+      const perView = Math.max(1, Math.round((months * 30.5) / avgDays));
+      const SKUW = 112;
+      const availW = (wrap.clientWidth || 1300) - SKUW - 2;
+      const colW = Math.max(72, Math.floor(availW / perView));
+      calState.colW = colW;
+      const prevScroll = calState.scrollLeft;
+      const html = gridHTML(cols, deals, skus, { template: `${SKUW}px repeat(${N}, ${colW}px)`, compact: colW < 128 });
       wrap.innerHTML = html;
       if (prevScroll != null) wrap.scrollLeft = prevScroll;
       else {
@@ -2447,6 +2554,15 @@ const App = (function () {
         calState.scrollLeft = null;
         calRenderGrid();
       });
+      const zoomSel = document.getElementById("pg-zoom");
+      zoomSel.value = String(banner.zoomMonths || 6);
+      zoomSel.addEventListener("change", async () => {
+        banner.zoomMonths = parseInt(zoomSel.value, 10);
+        await DB.put("banners", banner);
+        calState.scrollLeft = null;
+        calRenderGrid();
+      });
+      document.getElementById("pg-pdf-btn").addEventListener("click", openPdfModal);
       document.getElementById("pg-periods-btn").addEventListener("click", openPeriodsModal);
       document.getElementById("pg-notes-toggle").addEventListener("click", async () => {
         banner.notesHidden = !banner.notesHidden;

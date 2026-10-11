@@ -364,3 +364,6 @@ The **Banners** link in the top menu lets you add, rename, recolour, move, hide 
 
 ## Promo periods
 Use **Promo periods…** above each timeline to set a banner's columns: choose a code prefix (P, W…), first number, start date, length (weekly, fortnightly, 4-weekly or custom days), how many, and optional numbering restart; then edit any row's code, dates, label or beer flag. You can also copy another banner's periods.
+
+## Zoom & PDF
+The timeline's **Show** menu fits 3, 6 or 12 months on screen (tiles tighten automatically). **Export PDF** opens a print-ready page for any date range; choose Save as PDF in the print dialog. Margin figures and meeting notes are left out unless you tick them, so the PDF is safe for the sales team.

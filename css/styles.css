@@ -479,3 +479,18 @@ textarea { min-height: 60px; resize: vertical; }
 .pg-notecell textarea { width:100%; height:100%; min-height:64px; resize:vertical; border:1px solid transparent; background:transparent; font-size:11.5px; line-height:1.3; padding:3px 4px; box-sizing:border-box; }
 .pg-notecell textarea:focus { background:#fff; border-color:#e2c36b; outline:none; }
 #tref-table input[type=text], #tref-table select { width:100%; padding:4px 6px; font-size:13px; }
+
+/* readability: tighter tiles when many periods are on screen */
+.main.wide { max-width: none; padding-left: 12px; padding-right: 12px; }
+.pg-compact .pg-promoname { font-size: 12.5px; }
+.pg-compact .pg-price { font-size: 13px; }
+.pg-compact .pg-dealname, .pg-compact .pg-note { display: none; }
+.pg-compact .pg-dates-line { font-size: 9.5px; }
+.pg-compact .pg-scan, .pg-compact .pg-stats { font-size: 9.5px; }
+.pg-compact .pg-deal { padding: 5px 5px; }
+.pg-compact .pg-colhead .pg-month { font-size: 9px; }
+.pg-compact .pg-dates { font-size: 10.5px; }
+.pg-print .pg-promoname { font-size: 12px; }
+.pg-print.pg-compact .pg-note, .pg-print .pg-note { display: block; }
+.pg-print .pg-deal { overflow: visible; }
+.pg-print .pg-colhead { overflow: visible; }
