@@ -361,3 +361,6 @@ way SKU photos are.
 
 ## Banners page
 The **Banners** link in the top menu lets you add, rename, recolour, move, hide or delete banner groups and banners. Hidden items leave the top tabs but keep their data; a group can only be deleted once it has no banners.
+
+## Promo periods
+Use **Promo periods…** above each timeline to set a banner's columns: choose a code prefix (P, W…), first number, start date, length (weekly, fortnightly, 4-weekly or custom days), how many, and optional numbering restart; then edit any row's code, dates, label or beer flag. You can also copy another banner's periods.

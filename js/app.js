@@ -1736,6 +1736,8 @@ const App = (function () {
           <button class="btn-sm" id="pg-prev">◀ Earlier</button>
           <button class="btn-sm" id="pg-today">Today</button>
           <button class="btn-sm" id="pg-next">Later ▶</button>
+          <button class="btn-sm" id="pg-empty-toggle">Hide empty periods</button>
+          <button class="btn-sm" id="pg-periods-btn">Promo periods…</button>
           <button class="btn-sm" id="pg-notes-toggle">Hide meeting notes</button>
           <span class="muted small">Showing ~6 months at a time — scroll sideways (or use the buttons) to see the past and future.</span>
         </div>
@@ -1825,7 +1827,8 @@ const App = (function () {
     // one (e.g. Star Liquor's fortnightly P-periods); otherwise they're built
     // from the deals' own dates (start/end within 3 days share a column).
     function pgColumns(deals) {
-      const defined = banner.promoPeriods || (window.BANNER_CALENDARS || {})[banner.id];
+      // Every banner gets a full period calendar: its own if set, otherwise the standard fortnightly one.
+      const defined = banner.promoPeriods || (window.BANNER_CALENDARS || {})[banner.id] || (window.BANNER_CALENDARS || {})["star-liquor"];
       const cols = [];
       if (defined) {
         defined.forEach((p) => cols.push({ start: calParseDate(p.start), end: calParseDate(p.end), label: p.id, note: p.note || "", beer: !!p.beer, deals: [] }));
@@ -1877,7 +1880,118 @@ const App = (function () {
         em = e.toLocaleDateString("en-AU", { month: "short" });
       return sm === em && s.getFullYear() === e.getFullYear() ? `${s.getDate()}–${e.getDate()} ${sm}` : `${s.getDate()} ${sm}–${e.getDate()} ${em}`;
     }
+    // ---- Promo period calendar editor (P01 / W01 / dated, any length) ----
+    function openPeriodsModal() {
+      const modalRoot = document.getElementById("modal-root");
+      const current = banner.promoPeriods || (window.BANNER_CALENDARS || {})[banner.id] || (window.BANNER_CALENDARS || {})["star-liquor"] || [];
+      let rows = current.map((p) => ({ id: p.id || "", start: p.start, end: p.end, note: p.note || "", beer: !!p.beer }));
+      const today = calFmtDate(new Date());
+      const others = State.banners.filter((b) => b.id !== banner.id && (b.promoPeriods || (window.BANNER_CALENDARS || {})[b.id]));
+      const draw = () => {
+        modalRoot.innerHTML = `<div class="modal-backdrop"><div class="modal" style="max-width:860px;width:96%;max-height:92vh;overflow:auto;">
+          <h3>Promo periods — ${esc(banner.name)}</h3>
+          <p class="muted small">These become the timeline's columns. Generate a run (e.g. P01, P02… fortnightly, or W01… weekly), then tweak any row. Deals fall into the periods they overlap.</p>
+          <div class="card" style="padding:10px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;align-items:end;">
+              <div><label>Code prefix</label><input type="text" id="pp-prefix" value="P"></div>
+              <div><label>First number</label><input type="number" id="pp-first" value="1" min="0"></div>
+              <div><label>Digits (01 = 2)</label><input type="number" id="pp-digits" value="2" min="1" max="4"></div>
+              <div><label>First period starts</label><input type="date" id="pp-start" value="${rows[0] ? rows[0].start : today}"></div>
+              <div><label>Length</label><select id="pp-len"><option value="7">Weekly (7 days)</option><option value="14" selected>Fortnightly (14 days)</option><option value="28">4 weeks</option><option value="custom">Custom days…</option></select></div>
+              <div><label>Custom days</label><input type="number" id="pp-custom" value="10" min="1"></div>
+              <div><label>How many</label><input type="number" id="pp-count" value="26" min="1" max="200"></div>
+              <div><label>Restart numbering after</label><input type="number" id="pp-restart" value="" min="1" placeholder="never (e.g. 26)"></div>
+              <button class="btn-primary btn-sm" id="pp-gen">Generate</button>
+            </div>
+            ${others.length ? `<div style="margin-top:8px;">Or copy from: <select id="pp-copy"><option value="">—</option>${others.map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join("")}</select></div>` : ""}
+          </div>
+          <table class="table table-compact" style="margin-top:10px;"><thead><tr><th>Code</th><th>Start</th><th>End</th><th>Label / note</th><th>Beer</th><th></th></tr></thead><tbody id="pp-rows">
+            ${rows
+              .map(
+                (r, i) => `<tr data-i="${i}"><td><input type="text" class="pp-id" value="${esc(r.id)}" style="width:70px;"></td>
+              <td><input type="date" class="pp-s" value="${r.start}"></td><td><input type="date" class="pp-e" value="${r.end}"></td>
+              <td><input type="text" class="pp-n" value="${esc(r.note)}"></td><td><input type="checkbox" class="pp-b" ${r.beer ? "checked" : ""}></td>
+              <td><button class="btn-xs pp-del">✕</button></td></tr>`
+              )
+              .join("") || '<tr><td colspan="6" class="muted">No periods yet — generate some above or add a row.</td></tr>'}
+          </tbody></table>
+          <button class="btn-sm" id="pp-addrow">+ Add row</button>
+          <div class="modal-actions">
+            <div><button class="btn-secondary" id="pp-reset" title="Go back to the built-in calendar, or columns built from the deals' own dates">Clear periods</button></div>
+            <div><button class="btn-secondary" id="pp-cancel">Cancel</button> <button class="btn-primary" id="pp-save">Save</button></div>
+          </div></div></div>`;
+        const grab = () => {
+          rows = [...modalRoot.querySelectorAll("#pp-rows tr[data-i]")].map((tr) => ({ id: tr.querySelector(".pp-id").value.trim(), start: tr.querySelector(".pp-s").value, end: tr.querySelector(".pp-e").value, note: tr.querySelector(".pp-n").value.trim(), beer: tr.querySelector(".pp-b").checked }));
+        };
+        modalRoot.querySelector("#pp-gen").onclick = () => {
+          const q = (id) => modalRoot.querySelector(id).value;
+          const start = calParseDate(q("#pp-start"));
+          if (!calIsSaneDate(start)) return alert("Pick a valid start date.");
+          const len = q("#pp-len") === "custom" ? parseInt(q("#pp-custom"), 10) || 14 : parseInt(q("#pp-len"), 10);
+          const count = parseInt(q("#pp-count"), 10) || 26,
+            first = parseInt(q("#pp-first"), 10) || 0,
+            digits = parseInt(q("#pp-digits"), 10) || 2,
+            restart = parseInt(q("#pp-restart"), 10) || 0;
+          rows = [];
+          let num = first;
+          for (let i = 0; i < count; i++) {
+            const st = calAddDays(start, i * len);
+            rows.push({ id: q("#pp-prefix") + String(num).padStart(digits, "0"), start: calFmtDate(st), end: calFmtDate(calAddDays(st, len - 1)), note: "", beer: false });
+            num++;
+            if (restart && num > restart + first - 1) num = first;
+          }
+          draw();
+        };
+        const cp = modalRoot.querySelector("#pp-copy");
+        if (cp)
+          cp.onchange = () => {
+            const ob = State.banners.find((b) => b.id === cp.value);
+            const src = ob && (ob.promoPeriods || window.BANNER_CALENDARS[ob.id]);
+            if (src) {
+              rows = src.map((p) => ({ id: p.id || "", start: p.start, end: p.end, note: p.note || "", beer: !!p.beer }));
+              draw();
+            }
+          };
+        modalRoot.querySelector("#pp-addrow").onclick = () => {
+          grab();
+          const last = rows[rows.length - 1];
+          const st = last ? calFmtDate(calAddDays(calParseDate(last.end), 1)) : today;
+          rows.push({ id: "", start: st, end: last ? calFmtDate(calAddDays(calParseDate(st), calDiffDays(calParseDate(last.start), calParseDate(last.end)))) : st, note: "", beer: false });
+          draw();
+        };
+        modalRoot.querySelectorAll(".pp-del").forEach((b) =>
+          b.addEventListener("click", () => {
+            grab();
+            rows.splice(parseInt(b.closest("tr").dataset.i, 10), 1);
+            draw();
+          })
+        );
+        modalRoot.querySelector("#pp-cancel").onclick = () => (modalRoot.innerHTML = "");
+        modalRoot.querySelector("#pp-reset").onclick = async () => {
+          if (!confirm("Clear this banner's promo periods? The timeline will fall back to the built-in calendar (if any) or columns built from your deals' dates.")) return;
+          delete banner.promoPeriods;
+          banner.promoPeriodsCleared = true;
+          await DB.put("banners", banner);
+          modalRoot.innerHTML = "";
+          calRenderGrid();
+        };
+        modalRoot.querySelector("#pp-save").onclick = async () => {
+          grab();
+          const bad = rows.find((r) => !calIsSaneDate(calParseDate(r.start)) || !calIsSaneDate(calParseDate(r.end)) || r.end < r.start);
+          if (bad) return alert(`Check the dates on "${bad.id || "a row"}" — each needs a start, and an end on or after it.`);
+          banner.promoPeriods = rows.slice().sort((a, b) => (a.start < b.start ? -1 : 1));
+          delete banner.promoPeriodsCleared;
+          await DB.put("banners", banner);
+          modalRoot.innerHTML = "";
+          calState.scrollLeft = null;
+          calRenderGrid();
+        };
+      };
+      draw();
+    }
     function updateNotesBtn() {
+      const eb = document.getElementById("pg-empty-toggle");
+      if (eb) eb.textContent = banner.hideEmptyPeriods ? "Show empty periods" : "Hide empty periods";
       const btn = document.getElementById("pg-notes-toggle");
       if (!btn) return;
       const n = Object.keys(banner.plannerNotes || {}).length;
@@ -1895,6 +2009,14 @@ const App = (function () {
         return calIsSaneDate(s) && calIsSaneDate(e) && e >= winStart && s <= winEnd;
       });
       let cols = pgColumns(deals).filter((c) => c.end >= winStart && c.start <= winEnd);
+      if (banner.hideEmptyPeriods) {
+        const used = new Set();
+        deals.forEach((d) => {
+          const sp = pgSpan(d, cols);
+          if (sp) for (let i = sp[0]; i <= sp[1]; i++) used.add(i);
+        });
+        cols = cols.filter((c, i) => used.has(i));
+      }
       if (cols.length === 0) {
         wrap.innerHTML = '<p class="muted" style="padding:24px;text-align:center;">No promos in this window. Use "+ Add deal", or switch the date range.</p>';
         return;
@@ -2318,6 +2440,13 @@ const App = (function () {
       const step = () => (calState.colW || 120) * 6;
       document.getElementById("pg-prev").addEventListener("click", () => wrap.scrollBy({ left: -step(), behavior: "smooth" }));
       document.getElementById("pg-next").addEventListener("click", () => wrap.scrollBy({ left: step(), behavior: "smooth" }));
+      document.getElementById("pg-empty-toggle").addEventListener("click", async () => {
+        banner.hideEmptyPeriods = !banner.hideEmptyPeriods;
+        await DB.put("banners", banner);
+        calState.scrollLeft = null;
+        calRenderGrid();
+      });
+      document.getElementById("pg-periods-btn").addEventListener("click", openPeriodsModal);
       document.getElementById("pg-notes-toggle").addEventListener("click", async () => {
         banner.notesHidden = !banner.notesHidden;
         await DB.put("banners", banner);
