@@ -611,8 +611,9 @@ const App = (function () {
     const terms = latestBannerTerms(banner.id, period);
 
     const allPriced = State.skus.map((sku) => ({ sku, pricing: latestPricing(sku.id, banner.id, period) })).filter((r) => r.pricing);
-    const skuRows = allPriced.filter((r) => isSkuRanged(banner, r.sku.id));
-    const skusWithoutPricing = State.skus.filter((s) => !allPriced.find((r) => r.sku.id === s.id));
+    // Every ranged SKU gets a card, even if nothing is priced yet (blank card, ready to fill in).
+    const skuRows = State.skus.filter((s) => isSkuRanged(banner, s.id)).map((sku) => ({ sku, pricing: (allPriced.find((r) => r.sku.id === sku.id) || {}).pricing || { listPrice: 0, deals: [] } }));
+    const skusWithoutPricing = State.skus.filter((s) => !isSkuRanged(banner, s.id) && !allPriced.find((r) => r.sku.id === s.id));
     const rangingChips = State.skus
       .map((s) => `<button class="rng-chip ${isSkuRanged(banner, s.id) ? "on" : ""}" data-sku="${s.id}" title="Click to ${isSkuRanged(banner, s.id) ? "remove from" : "add to"} this banner's range">${isSkuRanged(banner, s.id) ? "✓" : "+"} ${esc(s.name)} <span class="muted small">${esc(s.packFormat || "")}</span></button>`)
       .join("");
@@ -2024,7 +2025,7 @@ const App = (function () {
       const skuIds = [];
       deals.forEach((d) => skuIds.indexOf(d.skuId) === -1 && skuIds.push(d.skuId));
       rangedSkus.forEach((s) => {
-        if (skuIds.indexOf(s.id) === -1 && latestPricing(s.id, banner.id, null) && (calState.filters.skuId === "all" || calState.filters.skuId === s.id)) skuIds.push(s.id);
+        if (skuIds.indexOf(s.id) === -1 && (calState.filters.skuId === "all" || calState.filters.skuId === s.id)) skuIds.push(s.id);
       });
       const skus = calOrderedSkus().filter((s) => skuIds.indexOf(s.id) !== -1);
       const N = cols.length;
