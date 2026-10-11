@@ -271,86 +271,9 @@ const App = (function () {
   }
 
   // ------------------------------------------------------------- Dashboard
-  route("dashboard", async (rest, main) => {
-    const period = State.viewPeriod;
-    let totalDeals = 0,
-      metDeals = 0,
-      missingTargets = 0,
-      gpSum = 0,
-      gpCount = 0;
-    const alerts = [];
-
-    State.banners.forEach((banner) => {
-      State.skus.forEach((sku) => {
-        const pr = latestPricing(sku.id, banner.id, period);
-        if (!pr) return;
-        pr.deals.forEach((deal) => {
-          const m = computeDeal(sku, banner, pr, deal, period);
-          totalDeals++;
-          if (m.gpPct != null) {
-            gpSum += m.gpPct;
-            gpCount++;
-          }
-          if (m.meetsTarget === true) metDeals++;
-          else if (m.meetsTarget === false) {
-            alerts.push({ sku, banner, deal, m });
-          } else if (m.targetMarginPct == null) {
-            missingTargets++;
-          }
-        });
-      });
-    });
-
-    const avgGp = gpCount ? gpSum / gpCount : null;
-    const groupCards = State.bannerGroups
-      .map((g) => {
-        const banners = State.banners.filter((b) => b.groupId === g.id);
-        return `<a class="card card-link" href="#/banner/${g.id}">
-        <h3>${badgeHTML(g)} ${esc(g.shortName)}</h3>
-        <p class="muted">${banners.length} banner${banners.length !== 1 ? "s" : ""}</p>
-      </a>`;
-      })
-      .join("");
-
-    alerts.sort((a, b) => (a.m.gapToTargetDollar || 0) - (b.m.gapToTargetDollar || 0));
-    const topAlerts = alerts.slice(0, 8);
-
-    main.innerHTML = `
-      <div class="page-header">
-        <h1>Dashboard</h1>
-        <div class="period-control">Viewing: ${periodSelectorHTML(period)}</div>
-      </div>
-      <div class="stat-grid">
-        <div class="card stat"><div class="stat-value">${State.skus.length}</div><div class="stat-label">SKUs</div></div>
-        <div class="card stat"><div class="stat-value">${State.banners.length}</div><div class="stat-label">Banners</div></div>
-        <div class="card stat"><div class="stat-value">${totalDeals}</div><div class="stat-label">Priced deals (${esc(periodLabel(period))})</div></div>
-        <div class="card stat"><div class="stat-value">${fmtPct(avgGp)}</div><div class="stat-label">Avg YM GP%</div></div>
-        <div class="card stat ${metDeals < totalDeals - missingTargets ? "stat-warn" : ""}"><div class="stat-value">${metDeals}/${totalDeals - missingTargets}</div><div class="stat-label">Deals meeting banner target</div></div>
-      </div>
-      <h2>Banner groups</h2>
-      <div class="card-grid">${groupCards}</div>
-      <h2>Deals not meeting banner margin target</h2>
-      ${
-        topAlerts.length === 0
-          ? `<p class="muted">No shortfalls found for ${esc(periodLabel(period))} 🎉</p>`
-          : `<table class="table">
-        <thead><tr><th>SKU</th><th>Banner</th><th>Deal</th><th>Shelf RRP (inc GST)</th><th>Banner Margin</th><th>Target</th><th>Scan deal needed</th></tr></thead>
-        <tbody>${topAlerts
-          .map(
-            (a) => `<tr>
-          <td>${skuThumbHTML(a.sku, "sm")}${esc(a.sku.name)}</td><td>${badgeHTML(a.banner, "sm")}${esc(a.banner.name)}</td><td>${esc(a.deal.label)}</td>
-          <td>${fmt$(a.deal.shelfRRP)}</td>
-          <td class="neg">${fmtPct(a.m.bannerMarginPct)}</td>
-          <td>${fmtPct(a.m.targetMarginPct)}</td>
-          <td class="neg">+${fmt$(a.m.gapToTargetDollar)} / unit</td>
-        </tr>`
-          )
-          .join("")}</tbody>
-      </table>`
-      }
-      <p class="muted small">${missingTargets} deal(s) have no target margin set for their banner yet — set these on the banner's Terms panel.</p>
-    `;
-    attachPeriodSelector(main);
+  // Dashboard content removed for now (it was confusing); land on the first banner instead.
+  route("dashboard", async () => {
+    navigate("#/banner/" + (State.banners[0] ? State.banners[0].id : "") );
   });
 
   // ------------------------------------------------------------ COGS Master
@@ -727,15 +650,12 @@ const App = (function () {
         ${skuRows.map(({ sku, pricing }) => skuCardHTML(sku, banner, pricing, period)).join("") || '<p class="muted">No ranged SKUs are priced for this banner yet. Switch SKUs on above, or use the dropdown to add one.</p>'}
       </div>
 
-      <div class="grid-2" style="margin-top:20px;">
+      <div style="margin-top:20px;">
         <div class="card">
-          <div class="card-header-row"><h3>Banner terms <span class="muted small">(all % based)</span></h3><button class="btn-sm" id="edit-terms">Edit / new period</button></div>
+          <div class="card-header-row"><h3>Banner terms <span class="muted small">(all % based)</span></h3><span><button class="btn-sm" id="manage-deal-types">Manage deal types</button> <button class="btn-sm" id="edit-terms">Edit / new period</button></span></div>
           ${renderTermsSummary(terms)}
         </div>
-        <div class="card">
-          <div class="card-header-row"><h3>Target margins</h3><button class="btn-sm" id="manage-deal-types">Manage deal types</button></div>
-          ${renderTargetMargins(terms, banner)}
-        </div>
+        <div class="card" id="tref-card">${targetRefHTML(banner, terms)}</div>
       </div>
       <div id="modal-root"></div>
     `;
@@ -754,6 +674,7 @@ const App = (function () {
       })
     );
     document.getElementById("edit-terms").addEventListener("click", () => openEditTermsModal(banner));
+    wireTargetRef(banner, terms);
     document.getElementById("manage-deal-types").addEventListener("click", () => openDealTypesModal(banner));
     document.getElementById("add-sku-select").addEventListener("change", (e) => {
       if (!e.target.value) return;
@@ -1047,6 +968,75 @@ const App = (function () {
         })
         .join("")}</tbody>
     </table>`;
+  }
+
+  /** Reference list of deals and their target margin for a banner (editable inline, not tied to the maths). */
+  function targetRefRows(banner, terms) {
+    if (!banner.targetRef) {
+      banner.targetRef = (banner.dealTypes || []).map((dt) => {
+        const t = terms ? (terms.targetMargins || []).find((tm) => tm.dealTypeId === dt.id) : null;
+        return { id: uid(), name: dt.label || "", format: dt.packType === "carton" ? "carton" : dt.packType === "single" ? "single" : "multipack", pct: t && t.targetPct != null ? Math.round(t.targetPct * 10000) / 100 : "", notes: "" };
+      });
+    }
+    return banner.targetRef;
+  }
+  function targetRefHTML(banner, terms) {
+    const rows = targetRefRows(banner, terms);
+    return `<div class="card-header-row"><h3>Target margins <span class="muted small">(reference — type to edit, saves automatically)</span></h3><button class="btn-sm" id="tref-add">+ Add deal</button></div>
+      <table class="table table-compact" id="tref-table">
+        <thead><tr><th>Deal</th><th>Format</th><th>Target margin %</th><th>Notes</th><th></th></tr></thead>
+        <tbody>${rows
+          .map(
+            (r) => `<tr data-id="${r.id}">
+          <td><input type="text" class="tref-name" value="${esc(r.name || "")}" placeholder="Deal name"></td>
+          <td><select class="tref-format"><option value="">—</option>${PACK_FORMATS.map((f) => `<option value="${f.id}" ${f.id === r.format ? "selected" : ""}>${f.label}</option>`).join("")}</select></td>
+          <td><input type="number" step="0.1" class="tref-pct" value="${r.pct === "" || r.pct == null ? "" : r.pct}" placeholder="%" style="width:80px;"></td>
+          <td><input type="text" class="tref-notes" value="${esc(r.notes || "")}" placeholder="Notes"></td>
+          <td><button class="btn-xs tref-del" title="Remove">✕</button></td></tr>`
+          )
+          .join("") || '<tr><td colspan="5" class="muted">No deals yet — click "+ Add deal".</td></tr>'}</tbody>
+      </table>`;
+  }
+  function wireTargetRef(banner, terms) {
+    const host = document.getElementById("tref-card");
+    if (!host) return;
+    const save = () => DB.put("banners", banner);
+    const redraw = () => {
+      host.innerHTML = targetRefHTML(banner, terms);
+      wireTargetRef(banner, terms);
+    };
+    const rowOf = (el) => banner.targetRef.find((r) => r.id === el.closest("tr").dataset.id);
+    host.querySelector("#tref-add").addEventListener("click", async () => {
+      banner.targetRef.push({ id: uid(), name: "", format: "", pct: "", notes: "" });
+      await save();
+      redraw();
+      const ins = host.querySelectorAll(".tref-name");
+      ins[ins.length - 1].focus();
+    });
+    host.addEventListener("input", (e) => {
+      const r = e.target.closest("tr[data-id]") && rowOf(e.target);
+      if (!r) return;
+      if (e.target.classList.contains("tref-name")) r.name = e.target.value;
+      else if (e.target.classList.contains("tref-pct")) r.pct = e.target.value === "" ? "" : parseFloat(e.target.value);
+      else if (e.target.classList.contains("tref-notes")) r.notes = e.target.value;
+      else return;
+      save();
+    });
+    host.addEventListener("change", (e) => {
+      if (!e.target.classList.contains("tref-format")) return;
+      const r = rowOf(e.target);
+      if (r) {
+        r.format = e.target.value;
+        save();
+      }
+    });
+    host.querySelectorAll(".tref-del").forEach((b) =>
+      b.addEventListener("click", async () => {
+        banner.targetRef = banner.targetRef.filter((r) => r.id !== b.closest("tr").dataset.id);
+        await save();
+        redraw();
+      })
+    );
   }
 
   function openEditTermsModal(banner) {
@@ -2459,7 +2449,6 @@ const App = (function () {
 
     const nav = document.getElementById("nav-links");
     nav.innerHTML = `
-      <a class="nav-link" data-route="dashboard" href="#/dashboard">Dashboard</a>
       <a class="nav-link" data-route="cogs" href="#/cogs">COGS Master</a>
       <a class="nav-link" data-route="sku-tool" href="#/sku-tool">SKU Tool</a>
       <a class="nav-link" data-route="compare" href="#/compare">Compare SKUs</a>
