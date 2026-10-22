@@ -494,3 +494,5 @@ textarea { min-height: 60px; resize: vertical; }
 .pg-print.pg-compact .pg-note, .pg-print .pg-note { display: block; }
 .pg-print .pg-deal { overflow: visible; }
 .pg-print .pg-colhead { overflow: visible; }
+.pg-list { font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; color: #3a3a32; margin-top: 3px; line-height: 1.25; }
+.pg-compact .pg-list { font-size: 9.5px; }

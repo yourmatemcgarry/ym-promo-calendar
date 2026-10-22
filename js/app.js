@@ -1650,7 +1650,8 @@ const App = (function () {
       targetMarginPct: m.targetMarginPct,
       actualMarginPct: m.bannerMarginPct,
       linked: true,
-      listPrice: pr.listPrice,
+      listPrice: m.listPrice != null ? m.listPrice : pr.listPrice,
+      discountPerCarton: dealRow.discountPerCarton || 0,
       shelfRRP: dealRow.shelfRRP,
       scanDeal: dealRow.scanDeal || 0,
       packFormat: dealPackFormat(banner, dealRow),
@@ -2011,8 +2012,9 @@ const App = (function () {
         <h3>Export timeline as PDF — ${esc(banner.name)}</h3>
         <p class="muted small">Opens a print-ready page. In the print dialog choose <strong>Save as PDF</strong> as the destination (landscape, background graphics on).</p>
         <div class="grid-2"><div><label>From</label><input type="date" id="pdf-from" value="${from}"></div><div><label>To</label><input type="date" id="pdf-to" value="${to}"></div></div>
-        <label>Periods per page</label>
-        <select id="pdf-per" class="select"><option value="6">6 (about 3 months — A4, easiest to read)</option><option value="13">13 (about 6 months — A3)</option><option value="4">4 (large print)</option></select>
+        <label>Months per page</label>
+        <select id="pdf-months" class="select"><option value="6" selected>6 months per page</option><option value="3">3 months per page (larger text)</option></select>
+        <p class="muted small">Each page is A4 landscape; longer ranges continue on further pages.</p>
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px;"><input type="checkbox" id="pdf-skip" style="width:auto;" checked> Leave out SKUs with no promos in the range</label>
         <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="pdf-stats" style="width:auto;"> Include margin vs target <span class="muted small">(internal — leave off for sales)</span></label>
         <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="pdf-notes" style="width:auto;"> Include meeting notes <span class="muted small">(internal)</span></label>
@@ -2024,54 +2026,78 @@ const App = (function () {
         const f = calParseDate(q("#pdf-from").value),
           t = calParseDate(q("#pdf-to").value);
         if (!calIsSaneDate(f) || !calIsSaneDate(t) || t < f) return alert("Check the From / To dates.");
-        const per = parseInt(q("#pdf-per").value, 10);
-        const opts = { stats: q("#pdf-stats").checked, notes: q("#pdf-notes").checked, skip: q("#pdf-skip").checked };
+        const opts = { months: parseInt(q("#pdf-months").value, 10), stats: q("#pdf-stats").checked, notes: q("#pdf-notes").checked, skip: q("#pdf-skip").checked };
         const w = window.open("", "_blank");
         if (!w) return alert("The print view was blocked by your browser — allow pop-ups for this page and try again.");
-        buildPrintDoc(w, f, t, per, opts);
+        buildPrintDoc(w, f, t, opts);
         modalRoot.innerHTML = "";
       };
     }
-    function buildPrintDoc(w, from, to, per, opts) {
+    function buildPrintDoc(w, from, to, opts) {
       const { deals, cols, skus } = calGridData();
       const sel = cols.filter((c) => c.end >= from && c.start <= to);
+      if (!sel.length) {
+        w.close();
+        return alert("No periods fall in that date range.");
+      }
+      // Pages hold 3 or 6 months of periods, with ~3 weeks of grace so a period or two
+      // that spills just past the limit stays on the page instead of starting a new one.
+      const limitDays = opts.months * 30.5 + 21;
       const pages = [];
-      for (let i = 0; i < sel.length; i += per) pages.push(sel.slice(i, i + per));
-      const hasDeal = (sku, pc) => deals.some((d) => d.skuId === sku.id && pc.some((c) => pgOverlap(calParseDate(d.startDate), calParseDate(d.endDate), c.start, c.end) > 0));
-      const anyDeal = (sku) => pages.some((pc) => hasDeal(sku, pc));
-      const useSkus = opts.skip ? skus.filter(anyDeal) : skus;
-      const big = per > 8;
+      let cur = [];
+      sel.forEach((c) => {
+        if (cur.length && calDiffDays(cur[0].start, c.end) + 1 > limitDays) {
+          pages.push(cur);
+          cur = [];
+        }
+        cur.push(c);
+      });
+      if (cur.length) pages.push(cur);
+      const useSkusFor = (dlist) => (opts.skip ? skus.filter((k) => dlist.some((d) => d.skuId === k.id)) : skus);
       const body = pages
         .map((pc, i) => {
           const dl = deals.filter((d) => pc.some((c) => pgOverlap(calParseDate(d.startDate), calParseDate(d.endDate), c.start, c.end) > 0));
-          const grid = gridHTML(pc, dl, useSkus, { template: `110px repeat(${pc.length}, minmax(0, 1fr))`, print: true, compact: per > 6, stats: opts.stats, notes: opts.notes });
-          return `<section class="pdf-page"><div class="pdf-head"><div><div class="pdf-title">Your Mates Brewing — ${esc(banner.name)} promo timeline</div>
-            <div class="pdf-sub">${fmtDMY(calFmtDate(pc[0].start))} to ${fmtDMY(calFmtDate(pc[pc.length - 1].end))} · page ${i + 1} of ${pages.length}</div></div>
+          const n = pc.length;
+          const natW = Math.max(1000, 110 + n * 104); // laid out at a readable size, then scaled to fit the page
+          const grid = gridHTML(pc, dl, useSkusFor(dl), { template: `110px repeat(${n}, minmax(0, 1fr))`, print: true, compact: n > 7, stats: opts.stats, notes: opts.notes });
+          return `<div class="pdf-clip"><div class="fit" style="width:${natW}px;transform-origin:0 0;"><div class="pdf-head"><div><div class="pdf-title">Your Mates Brewing — ${esc(banner.name)} promo timeline</div>
+            <div class="pdf-sub">${fmtDMY(calFmtDate(pc[0].start))} to ${fmtDMY(calFmtDate(pc[n - 1].end))} · page ${i + 1} of ${pages.length}</div></div>
             <div class="pdf-sub">Printed ${fmtDMY(calFmtDate(new Date()))}</div></div>
             <div class="pg-legend"><span><i class="pg-swatch pg-sgl"></i>Single</span><span><i class="pg-swatch pg-mpk"></i>Multipack</span><span><i class="pg-swatch pg-car"></i>Carton</span><span><i class="pg-swatch pg-oth"></i>Other</span><span><i class="pg-swatch pg-flagsw"></i>Catalogue / off-location</span></div>
-            ${grid}</section>`;
+            ${grid}</div></div>`;
         })
         .join("");
       const css = new URL("css/styles.css", window.location.href).href;
       w.document.open();
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(banner.name)} promo timeline</title><link rel="stylesheet" href="${css}">
         <style>
-          @page { size: ${big ? "A3" : "A4"} landscape; margin: 8mm; }
+          @page { size: A4 landscape; margin: 8mm; }
           html, body { background:#fff; margin:0; }
-          body { padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .pdf-page { page-break-after: always; break-after: page; }
-          .pdf-page:last-child { page-break-after: auto; break-after: auto; }
+          body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .pdf-clip { width: 281mm; height: 192mm; overflow: hidden; page-break-after: always; break-after: page; }
+          .pdf-clip:last-child { page-break-after: auto; break-after: auto; }
           .pdf-head { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:6px; }
           .pdf-title { font-size:18px; font-weight:800; } .pdf-sub { font-size:11px; color:#555; }
           .pg-grid.pg-print { width:100%; min-width:0; }
           .pg-print .pg-skucell, .pg-print .pg-corner { position:static; }
-          .pg-print .pg-deal, .pg-print .pg-skucell { break-inside: avoid; }
           .pg-notetext { font-size:11px; white-space:pre-wrap; padding:3px 4px; }
-          .pdf-bar { position:fixed; top:8px; right:8px; background:#0f7d74; color:#fff; padding:8px 12px; border-radius:8px; font:13px system-ui; cursor:pointer; }
+          .pdf-bar { position:fixed; top:8px; right:8px; background:#0f7d74; color:#fff; padding:8px 12px; border-radius:8px; font:13px system-ui; cursor:pointer; z-index:9; }
           @media print { .pdf-bar { display:none; } }
-        </style></head><body><div class="pdf-bar" onclick="window.print()">Print / Save as PDF</div>${body}</body></html>`);
+        </style></head><body><div class="pdf-bar" onclick="window.print()">Print / Save as PDF</div>${body}
+        <script>
+          function fit() {
+            var mm = 96 / 25.4, pw = 281 * mm, ph = 192 * mm;
+            document.querySelectorAll(".fit").forEach(function (el) {
+              el.style.transform = "none";
+              var s = Math.min(pw / el.offsetWidth, ph / el.offsetHeight, 1.6);
+              el.style.transform = "scale(" + s + ")";
+            });
+          }
+          window.addEventListener("beforeprint", fit);
+          fit();
+        <\/script></body></html>`);
       w.document.close();
-      const go = () => setTimeout(() => w.print(), 400);
+      const go = () => setTimeout(() => { w.fit && w.fit(); w.print(); }, 400);
       const link = w.document.querySelector("link");
       if (link) {
         link.onload = go;
@@ -2179,6 +2205,7 @@ const App = (function () {
               ${p.dealLabel ? `<div class="pg-dealname">${esc(p.dealLabel)}</div>` : ""}
               ${(p.price != null && !p.priceFromName) || p.tag ? `<div class="pg-pricerow">${p.price != null && !p.priceFromName ? `<span class="pg-price">${fmt$(p.price)}</span>` : ""}${p.tag ? `<span class="pg-tag pg-unit">${p.tag}</span>` : ""}</div>` : ""}
               ${p.scan ? `<div class="pg-scan">${fmt$(p.scan)} scan</div>` : ""}
+              ${p.d.linked && p.disp.listPrice ? `<div class="pg-list">List ${fmt$(p.disp.listPrice)}/ctn${p.disp.discountPerCarton ? ` · −${fmt$(p.disp.discountPerCarton)} disc` : ""}</div>` : ""}
               ${p.stats && showStats ? `<div class="pg-stats pg-stats-${ms}">${p.stats}</div>` : ""}
               <div class="pg-dates-line">${compact ? fmtDM(p.d.startDate) + "–" + fmtDM(p.d.endDate) : fmtDMY(p.d.startDate, true) + " – " + fmtDMY(p.d.endDate, true)}</div>
               ${p.noteShow ? `<div class="pg-note">${esc(p.noteShow)}</div>` : ""}
