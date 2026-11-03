@@ -1359,6 +1359,13 @@ const App = (function () {
         </div>
         <button class="btn-sm" id="cpi-fill-suggested">Fill all with a suggested % increase</button>
         <input type="number" step="0.1" id="cpi-suggest-pct" value="2.5" style="width:70px;display:inline-block;margin:0 6px;"> %
+        <div style="margin:10px 0;padding:10px;border:1px dashed var(--border);border-radius:8px;">
+          <strong>Flat $ increase</strong> <span class="muted small">— fills every row below; you can still change any row afterwards.</span><br>
+          <label style="display:inline-flex;align-items:center;gap:6px;margin:6px 12px 0 0;width:auto;">COGS +$<input type="number" step="0.01" id="cpi-flat-cogs" value="0" style="width:80px;"></label>
+          <label style="display:inline-flex;align-items:center;gap:6px;margin:6px 12px 0 0;width:auto;">List price +$<input type="number" step="0.01" id="cpi-flat-price" value="0" style="width:80px;"></label>
+          <button class="btn-sm" id="cpi-apply-flat">Fill all rows</button>
+          <button class="btn-sm" id="cpi-clear-all">Clear all to $0</button>
+        </div>
         <h4>Product COGS ($ increase per SKU)</h4>
         <table class="table table-compact">
           <thead><tr><th>SKU</th><th>Current COGS</th><th>$ increase</th><th>New COGS</th><th>% increase</th></tr></thead>
@@ -1478,6 +1485,25 @@ const App = (function () {
         row.querySelector(".dist-price-delta").value = delta;
         row.querySelector(".dist-price-delta").dispatchEvent(new Event("input"));
       });
+    });
+
+    const setAll = (body, sel, val) =>
+      body.querySelectorAll("tr").forEach((row) => {
+        const inp = row.querySelector(sel);
+        inp.value = val;
+        inp.dispatchEvent(new Event("input"));
+      });
+    document.getElementById("cpi-apply-flat").addEventListener("click", () => {
+      const fc = Calc.round2(parseFloat(document.getElementById("cpi-flat-cogs").value || 0));
+      const fp = Calc.round2(parseFloat(document.getElementById("cpi-flat-price").value || 0));
+      setAll(cogsRowsBody, ".cogs-delta", fc);
+      setAll(priceRowsBody, ".price-delta", fp);
+      setAll(distPriceRowsBody, ".dist-price-delta", fp);
+    });
+    document.getElementById("cpi-clear-all").addEventListener("click", () => {
+      setAll(cogsRowsBody, ".cogs-delta", 0);
+      setAll(priceRowsBody, ".price-delta", 0);
+      setAll(distPriceRowsBody, ".dist-price-delta", 0);
     });
 
     document.getElementById("cpi-apply-btn").addEventListener("click", async () => {
