@@ -172,6 +172,7 @@ const DB = (function () {
     await setMeta("periods", data.periods);
     await setMeta("currentPeriod", data.currentPeriod);
     await setMeta("seedAdditionsApplied", []);
+    await setMeta("fix-edg-scans-1", true);
     await setMeta("seeded", true);
     return true;
   }
@@ -193,6 +194,18 @@ const DB = (function () {
       changed = true;
     }
     if (changed) await setMeta("seedAdditionsApplied", done);
+  }
+
+  /** One-time data corrections (see js/seed-fixes.js) for databases seeded before the fix. */
+  async function applySeedFixes() {
+    if (!window.applySeedFixes) return;
+    if (await getMeta("fix-edg-scans-1")) return;
+    const pricing = await getAll("pricingHistory");
+    const terms = await getAll("bannerTermsHistory");
+    window.applySeedFixes(pricing, terms);
+    await putMany("pricingHistory", pricing.filter((p) => p.bannerId === "bws" || p.bannerId === "dans"));
+    await putMany("bannerTermsHistory", terms.filter((t) => t.bannerId === "bws" || t.bannerId === "dans"));
+    await setMeta("fix-edg-scans-1", true);
   }
 
   async function exportAll() {
@@ -263,6 +276,7 @@ const DB = (function () {
     setMeta,
     seedIfEmpty,
     applySeedAdditions,
+    applySeedFixes,
     exportAll,
     importAll,
   };

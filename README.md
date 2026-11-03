@@ -367,3 +367,9 @@ Use **Promo periods…** above each timeline to set a banner's columns: choose a
 
 ## Zoom & PDF
 The timeline's **Show** menu fits 3, 6 or 12 months on screen (tiles tighten automatically). **Export PDF** opens a print-ready page for any date range, 3 or 6 months per A4 landscape page (each page scaled to fit); choose Save as PDF in the print dialog. Margin figures and meeting notes are left out unless you tick them, so the PDF is safe for the sales team.
+
+## Endeavour (BWS / Dan Murphy's) margins
+EDG is both the banner and the distributor, so its warehouse fee, volume rebate and ullage come back to it. For banners whose distributor starts with "EDG", the banner margin is therefore worked out on YM Net (list less those lines), matching the "EDG FY27 Half 01" sheet. The missing FY27 H1 scan deals, Dan's Larry Jr warehouse issue deal and the carton target margins were also loaded from that sheet (applied once to existing data).
+
+## CPI and pricing periods
+Each pricing period has an effective date. Linked promos on the timeline are priced as at the promo's **start date** (using the period in force then), so a CPI / list-price update only changes promos starting on or after its effective date. Earlier promos keep their old prices and margins. The CPI Update page now requires an effective date.

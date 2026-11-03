@@ -71,6 +71,16 @@ const App = (function () {
   function sortedPeriodIds() {
     return State.periods.map((p) => p.id);
   }
+  /** The pricing period in force on a given date (ISO yyyy-mm-dd): the latest period whose effective date is on or before it. */
+  function periodForDate(iso) {
+    const dated = State.periods.filter((p) => p.effectiveDate).slice().sort((a, b) => (a.effectiveDate < b.effectiveDate ? -1 : 1));
+    if (!dated.length) return null;
+    let pick = dated[0];
+    dated.forEach((p) => {
+      if (p.effectiveDate <= iso) pick = p;
+    });
+    return pick.id;
+  }
   function skuById(id) {
     return State.skus.find((s) => s.id === id);
   }
@@ -215,6 +225,7 @@ const App = (function () {
       cogs: cogs ? { productCogs: cogs.productCogs } : { productCogs: 0 },
       bannerTerms: terms || {},
       targetMarginPct: targetPct,
+      bannerCostBasis: (terms && terms.bannerCostBasis) || (/^EDG/i.test((banner && banner.distributor) || "") ? "ymnet" : "list"),
       packQty: deal.packFormat === "twofor" ? packQtyFor(sku, "twofor", deal.packUnits) : deal.packQty || meta.defaultPackQty || 1,
       gstRate: GST_RATE,
     });
@@ -1473,8 +1484,8 @@ const App = (function () {
       const newId = document.getElementById("cpi-new-period-id").value.trim();
       const newLabel = document.getElementById("cpi-new-period-label").value.trim();
       const newDate = document.getElementById("cpi-new-period-date").value;
-      if (!newId || !newLabel) {
-        alert("Please provide a period id and label.");
+      if (!newId || !newLabel || !newDate) {
+        alert("Please provide a period id, label and effective date. The effective date decides which promos the new prices apply to: only promos starting on or after it.");
         return;
       }
       if (!State.periods.find((p) => p.id === newId)) {
@@ -1638,13 +1649,15 @@ const App = (function () {
       };
     }
     const dt = (banner.dealTypes || []).find((d) => d.id === entry.dealTypeId);
-    const pr = latestPricing(sku.id, banner.id, null); // always the latest period — this is what makes it "live"
+    // Priced as at the promo's start date: a CPI / list-price update only affects promos starting on or after its effective date.
+    const asOf = periodForDate(entry.startDate || calFmtDate(new Date()));
+    const pr = latestPricing(sku.id, banner.id, asOf);
     const dealRow = pr ? pr.deals.find((d) => d.dealTypeId === entry.dealTypeId) : null;
     const label = entry.promoName || (dealRow && dealRow.label) || (dt ? dt.label : "(deal removed)");
     if (!pr || !dealRow) {
       return { promoName: label, targetMarginPct: null, actualMarginPct: null, linked: true, pending: true };
     }
-    const m = computeDeal(sku, banner, pr, dealRow, null);
+    const m = computeDeal(sku, banner, pr, dealRow, asOf);
     return {
       promoName: label,
       targetMarginPct: m.targetMarginPct,
@@ -2462,7 +2475,7 @@ const App = (function () {
             preview.textContent = "Pick a banner, SKU and deal to preview live figures.";
             return;
           }
-          const disp = calDealDisplay({ linked: true, bannerId: b.id, skuId: s.id, dealTypeId: dtId });
+          const disp = calDealDisplay({ linked: true, bannerId: b.id, skuId: s.id, dealTypeId: dtId, startDate: (document.getElementById("cd-start") || {}).value });
           if (disp.pending) {
             preview.innerHTML = `<span style="color:var(--accent-warm-dark);">No price is set for "${esc(disp.promoName)}" on ${esc(s.name)} at ${esc(b.name)} yet — set it on the banner page, or link it anyway and come back once it's priced.</span>`;
           } else {
@@ -2470,6 +2483,7 @@ const App = (function () {
           }
         }
 
+        document.getElementById("cd-start").addEventListener("change", updateLinkedPreview);
         document.getElementById("cd-banner").addEventListener("change", (e) => {
           d.bannerId = e.target.value;
           d.dealTypeId = "";
@@ -2865,6 +2879,7 @@ const App = (function () {
     await DB.open();
     await DB.seedIfEmpty();
     await DB.applySeedAdditions();
+    await DB.applySeedFixes();
     const [skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, distributorPricing, periods, currentPeriod] = await Promise.all([
       DB.getAll("skus"),
       DB.getAll("cogsHistory"),

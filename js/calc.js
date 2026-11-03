@@ -156,7 +156,7 @@
    *   gstRate             : decimal GST rate used to convert shelfRRP to ex
    *                         GST for the banner-margin calc (default 0.10)
    */
-  function evaluateDeal({ listPrice, distributorFeePct, feeWaterfall, discountPerCarton, scanDeal, shelfRRP, cogs, bannerTerms, targetMarginPct, packQty, gstRate }) {
+  function evaluateDeal({ listPrice, distributorFeePct, feeWaterfall, discountPerCarton, scanDeal, shelfRRP, cogs, bannerTerms, targetMarginPct, packQty, gstRate, bannerCostBasis }) {
     const qty = packQty && packQty > 0 ? packQty : 1;
     const gst = gstRate != null ? gstRate : DEFAULT_GST_RATE;
 
@@ -192,7 +192,9 @@
     const pickFeePerCarton = (bannerTerms && bannerTerms.pickFeePerCarton) || 0;
     const pickFeePerShelfUnit = pickFeePerCarton / qty;
     const discountPerShelfUnit = (discountPerCarton || 0) / qty;
-    const bannerCostPriceBeforeScan = listPrice / qty + pickFeePerShelfUnit - discountPerShelfUnit;
+    // Endeavour (EDG) is both banner and distributor: its warehouse fee, volume rebate and ullage
+    // come back to it, so its real cost is YM Net (bannerCostBasis "ymnet"), not the invoiced list price.
+    const bannerCostPriceBeforeScan = bannerCostBasis === "ymnet" ? (ymNetEveryday - (discountPerCarton || 0)) / qty + pickFeePerShelfUnit : listPrice / qty + pickFeePerShelfUnit - discountPerShelfUnit;
     const bannerCostPrice = bannerCostPriceBeforeScan - (scanDeal || 0);
 
     // Shelf RRP is GST-inclusive; convert to ex GST before comparing to the
