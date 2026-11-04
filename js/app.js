@@ -1368,7 +1368,7 @@ const App = (function () {
         </div>
         <h4>Product COGS ($ increase per SKU)</h4>
         <table class="table table-compact">
-          <thead><tr><th>SKU</th><th>Current COGS</th><th>$ increase</th><th>New COGS</th><th>% increase</th></tr></thead>
+          <thead><tr><th>SKU</th><th>Current COGS</th><th>$ increase</th><th>New COGS (or type it here)</th><th>% increase</th></tr></thead>
           <tbody id="cpi-cogs-rows"></tbody>
         </table>
         <h4>Wholesale / list price ($ increase per SKU/banner)</h4>
@@ -1395,15 +1395,23 @@ const App = (function () {
         <td>${skuThumbHTML(sku, "sm")}${esc(sku.name)} <span class="muted small">${esc(sku.packFormat)}</span></td>
         <td class="cur-cogs">${fmt$(c.productCogs)}</td>
         <td><input type="number" step="0.01" class="cogs-delta" value="0"></td>
-        <td class="new-cogs">${fmt$(c.productCogs)}</td>
+        <td><input type="number" step="0.01" class="new-cogs-input" value="${c.productCogs}"></td>
         <td class="pct-cogs">0.0%</td>
       </tr>`);
       cogsRowsBody.appendChild(row);
       row.querySelector(".cogs-delta").addEventListener("input", (e) => {
         const delta = parseFloat(e.target.value || 0);
         const newVal = c.productCogs + delta;
-        row.querySelector(".new-cogs").textContent = fmt$(newVal);
+        row.querySelector(".new-cogs-input").value = Calc.round2(newVal);
         row.querySelector(".pct-cogs").textContent = fmtPct(Calc.pctIncrease(c.productCogs, delta));
+      });
+      // Type the new COGS directly instead, and the $ increase is worked out for you.
+      row.querySelector(".new-cogs-input").addEventListener("input", (e) => {
+        const nv = parseFloat(e.target.value);
+        if (Number.isNaN(nv)) return;
+        const dInp = row.querySelector(".cogs-delta");
+        dInp.value = Calc.round2(nv - c.productCogs);
+        row.querySelector(".pct-cogs").textContent = fmtPct(Calc.pctIncrease(c.productCogs, nv - c.productCogs));
       });
     });
 
@@ -1423,15 +1431,21 @@ const App = (function () {
         <td>${badgeHTML(banner, "sm")}${esc(banner.name)}</td>
         <td class="cur-price">${fmt$(p.listPrice)}</td>
         <td><input type="number" step="0.01" class="price-delta" value="0"></td>
-        <td class="new-price">${fmt$(p.listPrice)}</td>
+        <td><input type="number" step="0.01" class="new-price-input" value="${p.listPrice}"></td>
         <td class="pct-price">0.0%</td>
       </tr>`);
       priceRowsBody.appendChild(row);
       row.querySelector(".price-delta").addEventListener("input", (e) => {
         const delta = parseFloat(e.target.value || 0);
         const newVal = p.listPrice + delta;
-        row.querySelector(".new-price").textContent = fmt$(newVal);
+        row.querySelector(".new-price-input").value = Calc.round2(newVal);
         row.querySelector(".pct-price").textContent = fmtPct(Calc.pctIncrease(p.listPrice, delta));
+      });
+      row.querySelector(".new-price-input").addEventListener("input", (e) => {
+        const nv = parseFloat(e.target.value);
+        if (Number.isNaN(nv)) return;
+        row.querySelector(".price-delta").value = Calc.round2(nv - p.listPrice);
+        row.querySelector(".pct-price").textContent = fmtPct(Calc.pctIncrease(p.listPrice, nv - p.listPrice));
       });
     });
 
@@ -1452,15 +1466,21 @@ const App = (function () {
         <td>${esc(dp.distributor)}</td>
         <td class="cur-price">${fmt$(dp.listPrice)}</td>
         <td><input type="number" step="0.01" class="dist-price-delta" value="0"></td>
-        <td class="new-price">${fmt$(dp.listPrice)}</td>
+        <td><input type="number" step="0.01" class="new-price-input" value="${dp.listPrice}"></td>
         <td class="pct-price">0.0%</td>
       </tr>`);
       distPriceRowsBody.appendChild(row);
       row.querySelector(".dist-price-delta").addEventListener("input", (e) => {
         const delta = parseFloat(e.target.value || 0);
         const newVal = dp.listPrice + delta;
-        row.querySelector(".new-price").textContent = fmt$(newVal);
+        row.querySelector(".new-price-input").value = Calc.round2(newVal);
         row.querySelector(".pct-price").textContent = fmtPct(Calc.pctIncrease(dp.listPrice, delta));
+      });
+      row.querySelector(".new-price-input").addEventListener("input", (e) => {
+        const nv = parseFloat(e.target.value);
+        if (Number.isNaN(nv)) return;
+        row.querySelector(".dist-price-delta").value = Calc.round2(nv - dp.listPrice);
+        row.querySelector(".pct-price").textContent = fmtPct(Calc.pctIncrease(dp.listPrice, nv - dp.listPrice));
       });
     });
 
@@ -1514,6 +1534,19 @@ const App = (function () {
         alert("Please provide a period id, label and effective date. The effective date decides which promos the new prices apply to: only promos starting on or after it.");
         return;
       }
+      // Safety check: catch a new value typed into a "$ increase" box (or a doubled price) before it is saved.
+      const big = [];
+      cogsRowsBody.querySelectorAll("tr").forEach((row) => {
+        const c = latestCogs(row.dataset.sku, null);
+        const d = parseFloat(row.querySelector(".cogs-delta").value || 0);
+        if (c && c.productCogs && Math.abs(d) / c.productCogs > 0.15) big.push(`${(skuById(row.dataset.sku) || {}).name} COGS ${fmt$(c.productCogs)} → ${fmt$(c.productCogs + d)} (${fmtPct(d / c.productCogs)})`);
+      });
+      priceRowsBody.querySelectorAll("tr").forEach((row) => {
+        const p = latestByPair[row.dataset.sku + "|" + row.dataset.banner];
+        const d = parseFloat(row.querySelector(".price-delta").value || 0);
+        if (p && p.listPrice && Math.abs(d) / p.listPrice > 0.15) big.push(`${(skuById(row.dataset.sku) || {}).name} @ ${(bannerById(row.dataset.banner) || {}).name} list ${fmt$(p.listPrice)} → ${fmt$(p.listPrice + d)}`);
+      });
+      if (big.length && !confirm("These changes are bigger than 15%. Is that right? (Remember the boxes are $ INCREASES, not new prices.)\n\n" + big.slice(0, 8).join("\n") + (big.length > 8 ? `\n…and ${big.length - 8} more` : ""))) return;
       if (!State.periods.find((p) => p.id === newId)) {
         const newPeriod = { id: newId, label: newLabel, effectiveDate: newDate || null };
         State.periods.push(newPeriod);
@@ -2906,6 +2939,8 @@ const App = (function () {
     await DB.seedIfEmpty();
     await DB.applySeedAdditions();
     await DB.applySeedFixes();
+    await DB.applyDansBoard();
+    await DB.applyBwsBoard();
     const [skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, distributorPricing, periods, currentPeriod] = await Promise.all([
       DB.getAll("skus"),
       DB.getAll("cogsHistory"),

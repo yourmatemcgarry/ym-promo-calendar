@@ -373,3 +373,12 @@ EDG is both the banner and the distributor, so its warehouse fee, volume rebate 
 
 ## CPI and pricing periods
 Each pricing period has an effective date. Linked promos on the timeline are priced as at the promo's **start date** (using the period in force then), so a CPI / list-price update only changes promos starting on or after its effective date. Earlier promos keep their old prices and margins. The CPI Update page now requires an effective date.
+
+## CPI page: typing new values
+On CPI Update, each row has a **$ increase** box and a **New COGS / New list price** box. Type either — the other is worked out. If any change is over 15% you are asked to confirm before it is saved.
+
+## Dan Murphy's timeline (rebuilt from the slotting board)
+Dan's promos from 1 July 2026 onwards were replaced with the 2026 promos on the Dans Slotting Board that have a **Deal #** filled in (30 promos), plus the 41 Jan–Jun 2027 promos from the FY27 template (loaded as *planned*). Each is linked to a deal on its SKU's pricing card — an existing deal with the same format, price and scan is reused, otherwise a new one is created ("Carton $55 · $13 scan", "4-pack $17 · $1.2 scan", etc.). Catalogue / off-location extras on the same promo are shown as a note and red flag. Dan's timeline columns are now the board's own periods (Wk 1–4, Wk 5–7 …). Applied once to existing data.
+
+## BWS timeline (rebuilt from the slotting board)
+BWS promos from 1 July 2026 onwards were replaced with all 53 promos on the BWS FY27 slotting board (all approved), each linked to a deal on its SKU's pricing card (existing deal reused when format, price and scan match, otherwise created). BWS timeline columns are the board's own 4–5 week periods (Jul … Jun). Applied once to existing data.

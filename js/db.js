@@ -208,6 +208,44 @@ const DB = (function () {
     await setMeta("fix-edg-scans-1", true);
   }
 
+  /** One-time rebuild of Dan Murphy's promos from July 2026 (see js/dans-board.js). */
+  async function applyDansBoard() {
+    if (!window.applyDansBoard) return;
+    if (await getMeta("fix-dans-board-2")) return;
+    const ranBefore = !!(await getMeta("fix-dans-board-1")); // second pass (adds 2027): only replace the promos this fix created
+    const banners = await getAll("banners");
+    const banner = banners.find((b) => b.id === "dans");
+    if (!banner) return;
+    const [calendarDeals, pricingRows, skus, periods] = await Promise.all([getAll("calendarDeals"), getAll("pricingHistory"), getAll("skus"), getMeta("periods")]);
+    const upc = {};
+    skus.forEach((k) => (upc[k.id] = k.unitsPerCarton));
+    const res = window.applyDansBoard({ calendarDeals, pricingRows, banner, periods: periods || [], unitsPerCarton: upc, onlyBoard: ranBefore });
+    for (const id of res.removedIds) await remove("calendarDeals", id);
+    await putMany("calendarDeals", res.added);
+    await putMany("pricingHistory", res.changedPricing);
+    await put("banners", banner);
+    await setMeta("fix-dans-board-1", true);
+    await setMeta("fix-dans-board-2", true);
+  }
+
+  /** One-time rebuild of BWS promos from July 2026 (see js/bws-board.js). */
+  async function applyBwsBoard() {
+    if (!window.applyBwsBoard) return;
+    if (await getMeta("fix-bws-board-1")) return;
+    const banners = await getAll("banners");
+    const banner = banners.find((b) => b.id === "bws");
+    if (!banner) return;
+    const [calendarDeals, pricingRows, skus, periods] = await Promise.all([getAll("calendarDeals"), getAll("pricingHistory"), getAll("skus"), getMeta("periods")]);
+    const upc = {};
+    skus.forEach((k) => (upc[k.id] = k.unitsPerCarton));
+    const res = window.applyBwsBoard({ calendarDeals, pricingRows, banner, periods: periods || [], unitsPerCarton: upc });
+    for (const id of res.removedIds) await remove("calendarDeals", id);
+    await putMany("calendarDeals", res.added);
+    await putMany("pricingHistory", res.changedPricing);
+    await put("banners", banner);
+    await setMeta("fix-bws-board-1", true);
+  }
+
   async function exportAll() {
     const [skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, distributorPricing, periods, currentPeriod] = await Promise.all([
       getAll("skus"),
@@ -277,6 +315,8 @@ const DB = (function () {
     seedIfEmpty,
     applySeedAdditions,
     applySeedFixes,
+    applyDansBoard,
+    applyBwsBoard,
     exportAll,
     importAll,
   };
