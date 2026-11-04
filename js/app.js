@@ -2209,6 +2209,39 @@ const App = (function () {
       const skus = calOrderedSkus().filter((s) => skuIds.indexOf(s.id) !== -1);
       return { deals, cols, skus };
     }
+    function calNotesMap(cols) {
+      const raw = banner.plannerNotes || {};
+      const map = {};
+      const from = [];
+      const colKeys = cols.map((c) => calFmtDate(c.start));
+      Object.keys(raw).forEach((k) => {
+        if (!raw[k] || !String(raw[k]).trim()) return;
+        if (colKeys.indexOf(k) !== -1) {
+          map[k] = (map[k] ? map[k] + "\n" : "") + raw[k];
+          return;
+        }
+        const dt = calParseDate(k);
+        if (!calIsSaneDate(dt) || !cols.length) return;
+        let idx = cols.findIndex((c) => c.start <= dt && dt <= c.end);
+        if (idx < 0) {
+          let best = 0,
+            bd = Infinity;
+          cols.forEach((c, i) => {
+            const mid = (c.start.getTime() + c.end.getTime()) / 2;
+            const dist = Math.abs(mid - dt.getTime());
+            if (dist < bd) {
+              bd = dist;
+              best = i;
+            }
+          });
+          idx = best;
+        }
+        const key = colKeys[idx];
+        map[key] = (map[key] ? map[key] + "\n" : "") + "[" + fmtDMY(k, true) + "] " + raw[k];
+        from.push(k);
+      });
+      return { map, from };
+    }
     function gridHTML(cols, deals, skus, opts) {
       const N = cols.length;
       const today = new Date();
@@ -2231,7 +2264,11 @@ const App = (function () {
       });
       let row = 2;
       // Meeting-notes row: one editable note per period column, stored on the banner record.
-      const notes = banner.plannerNotes || {};
+      // Notes are stored against a period's start date. If the periods changed (e.g. a new promo calendar),
+      // notes whose date no longer matches a column's start are shown on the column that contains that date.
+      const nm = calNotesMap(cols);
+      const notes = nm.map;
+      if (!print) calState.mergedKeys = nm.from;
       const showNotes = print ? opts.notes && cols.some((c) => notes[calFmtDate(c.start)]) : !banner.notesHidden;
       if (showNotes) {
         html += `<div class="pg-corner pg-notelabel" style="grid-row:2;grid-column:1;">MEETING NOTES<br><span class="muted small" style="letter-spacing:0;font-family:inherit;">with promo planners</span></div>`;
@@ -2328,6 +2365,9 @@ const App = (function () {
           if (v) banner.plannerNotes[t.dataset.notekey] = t.value;
           else delete banner.plannerNotes[t.dataset.notekey];
         });
+        // notes that were re-homed onto a column are now stored under it
+        (calState.mergedKeys || []).forEach((k) => delete banner.plannerNotes[k]);
+        calState.mergedKeys = [];
         await DB.put("banners", banner);
         updateNotesBtn();
       };
