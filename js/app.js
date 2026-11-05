@@ -911,7 +911,9 @@ const App = (function () {
         const dt = (banner.dealTypes || []).find((d) => d.id === dtId);
         if (!dt) return;
         const fmt = dt.packType === "carton" ? "carton" : "multipack";
-        nd = { dealTypeId: dt.id, label: dt.label, dealType: dt.dealType, packFormat: fmt, packUnits: 4, packQty: dt.defaultPackQty, shelfRRP: 0, discountPerCarton: 0, scanDeal: 0, targetPct: targetMarginForDealType(terms, dt.id) };
+        // two deals on one card must never share an id, or the timeline can't tell them apart
+        const newId = cardEl._deals.some((d) => d.dealTypeId === dt.id) ? dt.id + "-" + uid().slice(0, 5) : dt.id;
+        nd = { dealTypeId: newId, label: dt.label, dealType: dt.dealType, packFormat: fmt, packUnits: 4, packQty: dt.defaultPackQty, shelfRRP: 0, discountPerCarton: 0, scanDeal: 0, targetPct: targetMarginForDealType(terms, dt.id) };
       }
       cardEl._deals.push(nd);
       e.target.value = "";
@@ -2813,6 +2815,28 @@ const App = (function () {
     };
   });
 
+  /** Repair pricing cards where two deals share the same id (the second one would never be found by the timeline). */
+  async function dedupeDealIds() {
+    for (const rec of State.pricingHistory) {
+      const seen = new Set();
+      let changed = false;
+      const banner = bannerById(rec.bannerId);
+      (rec.deals || []).forEach((d) => {
+        if (!seen.has(d.dealTypeId)) {
+          seen.add(d.dealTypeId);
+          return;
+        }
+        const orig = d.dealTypeId;
+        if (!d.packFormat) d.packFormat = dealPackFormat(banner, d);
+        if (d.targetPct == null) d.targetPct = targetMarginForDealType(latestBannerTerms(rec.bannerId, rec.period), orig);
+        d.dealTypeId = orig + "-" + uid().slice(0, 5);
+        seen.add(d.dealTypeId);
+        changed = true;
+      });
+      if (changed) await DB.put("pricingHistory", rec);
+    }
+  }
+
   // ------------------------------------------------------ Banner management
   function visibleBanners() {
     return State.banners.filter((b) => !b.hidden && !(State.bannerGroups.find((g) => g.id === b.groupId) || {}).hidden);
@@ -2995,6 +3019,7 @@ const App = (function () {
     ]);
     Object.assign(State, { skus, cogsHistory, bannerGroups, banners, bannerTermsHistory, pricingHistory, calendarDeals, distributorPricing, periods, currentPeriod });
     State.viewPeriod = currentPeriod;
+    await dedupeDealIds();
 
     const nav = document.getElementById("nav-links");
     nav.innerHTML = `
